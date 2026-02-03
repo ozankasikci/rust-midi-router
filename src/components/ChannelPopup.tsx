@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { Route, ChannelFilter } from "../types";
 import { setRouteChannels, removeRoute } from "../hooks/useMidi";
-import { useAppStore } from "../stores/appStore";
 
 interface Props {
   route: Route;
@@ -11,7 +10,6 @@ interface Props {
 }
 
 export function ChannelPopup({ route, x, y, onClose }: Props) {
-  const refreshRoutes = useAppStore((s) => s.refreshPorts);
   const [selectedChannels, setSelectedChannels] = useState<Set<number>>(
     new Set()
   );

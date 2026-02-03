@@ -39,13 +39,14 @@ function noteName(note: number): string {
 
 function formatTimestamp(ts: number): string {
   const date = new Date(ts / 1000); // Convert microseconds to milliseconds
-  return date.toLocaleTimeString("en-US", {
+  const timeStr = date.toLocaleTimeString("en-US", {
     hour12: false,
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
-    fractionalSecondDigits: 3,
   });
+  const ms = date.getMilliseconds().toString().padStart(3, "0");
+  return `${timeStr}.${ms}`;
 }
 
 function ActivityRow({ activity }: { activity: MidiActivity }) {

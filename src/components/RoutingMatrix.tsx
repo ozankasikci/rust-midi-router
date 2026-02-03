@@ -11,7 +11,6 @@ export function RoutingMatrix() {
     portActivity,
     refreshPorts,
     addRoute,
-    removeRoute,
     toggleRoute,
   } = useAppStore();
 
