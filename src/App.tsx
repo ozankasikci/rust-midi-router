@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { RoutingMatrix } from "./components/RoutingMatrix";
 import { MonitorLog } from "./components/MonitorLog";
+import { PresetBar } from "./components/PresetBar";
 import "./App.css";
 
 type Tab = "matrix" | "monitor";
@@ -12,6 +13,7 @@ function App() {
     <div className="app">
       <header className="app-header">
         <h1>MIDI Router</h1>
+        <PresetBar />
       </header>
 
       <main className="app-main">

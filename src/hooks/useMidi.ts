@@ -1,5 +1,5 @@
 import { invoke, Channel } from "@tauri-apps/api/core";
-import { MidiPort, Route, ChannelFilter, MidiActivity } from "../types";
+import { MidiPort, Route, ChannelFilter, MidiActivity, Preset } from "../types";
 
 export async function getPorts(): Promise<[MidiPort[], MidiPort[]]> {
   return invoke("get_ports");
@@ -37,4 +37,24 @@ export async function startMidiMonitor(
   const channel = new Channel<MidiActivity>();
   channel.onmessage = onActivity;
   return invoke("start_midi_monitor", { onEvent: channel });
+}
+
+export async function listPresets(): Promise<Preset[]> {
+  return invoke("list_presets");
+}
+
+export async function savePreset(name: string): Promise<Preset> {
+  return invoke("save_preset", { name });
+}
+
+export async function loadPreset(presetId: string): Promise<Preset> {
+  return invoke("load_preset", { presetId });
+}
+
+export async function deletePreset(presetId: string): Promise<void> {
+  return invoke("delete_preset", { presetId });
+}
+
+export async function getActivePresetId(): Promise<string | null> {
+  return invoke("get_active_preset_id");
 }
