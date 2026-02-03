@@ -1,7 +1,8 @@
 //! Tauri command handlers
 
+use crate::config::preset;
 use crate::midi::engine::{EngineEvent, MidiEngine};
-use crate::types::{ChannelFilter, MidiActivity, MidiPort, PortId, Route};
+use crate::types::{ChannelFilter, MidiActivity, MidiPort, PortId, Preset, Route};
 use std::sync::Mutex;
 use tauri::{ipc::Channel, State};
 use uuid::Uuid;
@@ -122,4 +123,41 @@ pub fn start_midi_monitor(
     });
 
     Ok(())
+}
+
+#[tauri::command]
+pub fn list_presets() -> Vec<Preset> {
+    preset::list_presets()
+}
+
+#[tauri::command]
+pub fn save_preset(state: State<AppState>, name: String) -> Result<Preset, String> {
+    let routes = state.routes.lock().unwrap().clone();
+    preset::save_preset(name, routes)
+}
+
+#[tauri::command]
+pub fn load_preset(state: State<AppState>, preset_id: String) -> Result<Preset, String> {
+    let id = Uuid::parse_str(&preset_id).map_err(|e| e.to_string())?;
+    let p = preset::get_preset(id).ok_or_else(|| "Preset not found".to_string())?;
+
+    {
+        let mut routes = state.routes.lock().unwrap();
+        *routes = p.routes.clone();
+        state.engine.set_routes(routes.clone())?;
+    }
+
+    preset::set_active_preset(Some(id))?;
+    Ok(p)
+}
+
+#[tauri::command]
+pub fn delete_preset(preset_id: String) -> Result<(), String> {
+    let id = Uuid::parse_str(&preset_id).map_err(|e| e.to_string())?;
+    preset::delete_preset(id)
+}
+
+#[tauri::command]
+pub fn get_active_preset_id() -> Option<String> {
+    preset::get_active_preset().map(|p| p.id.to_string())
 }

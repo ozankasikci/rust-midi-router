@@ -28,6 +28,11 @@ pub fn run() {
             commands::toggle_route,
             commands::set_route_channels,
             commands::start_midi_monitor,
+            commands::list_presets,
+            commands::save_preset,
+            commands::load_preset,
+            commands::delete_preset,
+            commands::get_active_preset_id,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
