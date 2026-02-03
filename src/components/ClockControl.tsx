@@ -24,20 +24,47 @@ export function ClockControl() {
     }
   };
 
+  const handlePlay = () => {
+    api.sendTransportStart();
+  };
+
+  const handleStop = () => {
+    api.sendTransportStop();
+  };
+
   return (
     <div className="clock-control">
-      <label>BPM:</label>
-      <input
-        type="number"
-        value={bpm}
-        onChange={handleBpmChange}
-        min={20}
-        max={300}
-        step={0.1}
-      />
-      <span className={`clock-status ${running ? "playing" : "stopped"}`}>
-        {running ? "\u25B6 Playing" : "\u25CF Stopped"}
-      </span>
+      <div className="transport-buttons">
+        <button
+          className={`transport-btn play-btn ${running ? "active" : ""}`}
+          onClick={handlePlay}
+          title="Play (Send MIDI Start)"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+            <polygon points="5,3 19,12 5,21" />
+          </svg>
+        </button>
+        <button
+          className="transport-btn stop-btn"
+          onClick={handleStop}
+          title="Stop (Send MIDI Stop)"
+        >
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+            <rect x="3" y="3" width="18" height="18" />
+          </svg>
+        </button>
+      </div>
+      <div className="bpm-control">
+        <label>BPM</label>
+        <input
+          type="number"
+          value={bpm}
+          onChange={handleBpmChange}
+          min={20}
+          max={300}
+          step={0.1}
+        />
+      </div>
     </div>
   );
 }

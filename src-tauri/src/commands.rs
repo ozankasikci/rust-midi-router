@@ -215,6 +215,16 @@ pub fn get_clock_bpm(state: State<AppState>) -> f64 {
 }
 
 #[tauri::command]
+pub fn send_transport_start(state: State<AppState>) -> Result<(), String> {
+    state.engine.send_start()
+}
+
+#[tauri::command]
+pub fn send_transport_stop(state: State<AppState>) -> Result<(), String> {
+    state.engine.send_stop()
+}
+
+#[tauri::command]
 pub fn start_clock_monitor(
     state: State<AppState>,
     on_event: Channel<ClockState>,

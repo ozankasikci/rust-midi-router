@@ -13,6 +13,8 @@ pub enum EngineCommand {
     RefreshPorts,
     SetRoutes(Vec<Route>),
     SetBpm(f64),
+    SendStart,
+    SendStop,
     Shutdown,
 }
 
@@ -73,6 +75,14 @@ impl MidiEngine {
 
     pub fn set_bpm(&self, bpm: f64) -> Result<(), String> {
         self.send_command(EngineCommand::SetBpm(bpm))
+    }
+
+    pub fn send_start(&self) -> Result<(), String> {
+        self.send_command(EngineCommand::SendStart)
+    }
+
+    pub fn send_stop(&self) -> Result<(), String> {
+        self.send_command(EngineCommand::SendStop)
     }
 
     pub fn shutdown(&self) -> Result<(), String> {
@@ -384,6 +394,35 @@ fn engine_loop(cmd_rx: Receiver<EngineCommand>, event_tx: Sender<EngineEvent>) {
                     bpm: clock_bpm,
                     running: clock_running,
                 }));
+            }
+            Ok(EngineCommand::SendStart) => {
+                eprintln!("[TRANSPORT] Sending START");
+                clock_running = true;
+                last_clock_tick = None; // Reset timing
+                let _ = event_tx.send(EngineEvent::ClockStateChanged(ClockState {
+                    bpm: clock_bpm,
+                    running: clock_running,
+                }));
+                // Send Start to all outputs
+                let mut outputs_guard = output_connections.lock().unwrap();
+                for (name, conn) in outputs_guard.iter_mut() {
+                    eprintln!("[TRANSPORT] Sending START to {}", name);
+                    let _ = conn.send(&[0xFA]);
+                }
+            }
+            Ok(EngineCommand::SendStop) => {
+                eprintln!("[TRANSPORT] Sending STOP");
+                clock_running = false;
+                let _ = event_tx.send(EngineEvent::ClockStateChanged(ClockState {
+                    bpm: clock_bpm,
+                    running: clock_running,
+                }));
+                // Send Stop to all outputs
+                let mut outputs_guard = output_connections.lock().unwrap();
+                for (name, conn) in outputs_guard.iter_mut() {
+                    eprintln!("[TRANSPORT] Sending STOP to {}", name);
+                    let _ = conn.send(&[0xFC]);
+                }
             }
             Ok(EngineCommand::Shutdown) => {
                 break;

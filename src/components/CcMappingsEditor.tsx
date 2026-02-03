@@ -5,6 +5,7 @@ import {
   getParametersByCategory,
 } from "../data/deviceCcMaps";
 import { startMidiMonitor } from "../hooks/useMidi";
+import { ChannelSelector } from "./ui";
 
 interface Props {
   ccPassthrough: boolean;
@@ -17,7 +18,7 @@ interface Props {
 interface FlatRow {
   sourceCC: number;
   targetCC: number;
-  channels: string; // comma-separated
+  channels: number[];
 }
 
 export function CcMappingsEditor({
@@ -51,7 +52,7 @@ export function CcMappingsEditor({
         flatRows.push({
           sourceCC: mapping.source_cc,
           targetCC: target.cc,
-          channels: target.channels.join(", "),
+          channels: [...target.channels],
         });
       }
     }
@@ -98,20 +99,14 @@ export function CcMappingsEditor({
   }, [learningRowIndex, handleMidiActivity]);
 
   // Convert flat rows back to nested CcMapping structure
+  // Keep rows even with empty channels (they just won't route anything)
   const rowsToMappings = (flatRows: FlatRow[]): CcMapping[] => {
     const mappingMap = new Map<number, CcTarget[]>();
 
     for (const row of flatRows) {
-      const channels = row.channels
-        .split(",")
-        .map((s) => parseInt(s.trim(), 10))
-        .filter((n) => !isNaN(n) && n >= 1 && n <= 16);
-
-      if (channels.length === 0) continue;
-
       const target: CcTarget = {
         cc: row.targetCC,
-        channels,
+        channels: row.channels,
       };
 
       if (!mappingMap.has(row.sourceCC)) {
@@ -126,14 +121,14 @@ export function CcMappingsEditor({
     }));
   };
 
-  const updateRow = (index: number, field: keyof FlatRow, value: string) => {
+  const updateRow = (index: number, field: keyof FlatRow, value: string | number[]) => {
     const newRows = [...rows];
     if (field === "sourceCC" || field === "targetCC") {
-      const num = parseInt(value, 10);
+      const num = parseInt(value as string, 10);
       if (isNaN(num) || num < 0 || num > 127) return;
       newRows[index] = { ...newRows[index], [field]: num };
-    } else {
-      newRows[index] = { ...newRows[index], [field]: value };
+    } else if (field === "channels") {
+      newRows[index] = { ...newRows[index], channels: value as number[] };
     }
     setRows(newRows);
     onChange(passthrough, rowsToMappings(newRows));
@@ -144,7 +139,7 @@ export function CcMappingsEditor({
     const defaultTargetCC = deviceMap ? 16 : 74;
     const newRows = [
       ...rows,
-      { sourceCC: 1, targetCC: defaultTargetCC, channels: "1" },
+      { sourceCC: 1, targetCC: defaultTargetCC, channels: [1] },
     ];
     setRows(newRows);
     onChange(passthrough, rowsToMappings(newRows));
@@ -289,11 +284,9 @@ export function CcMappingsEditor({
                 <td>{renderSourceCcInput(row, index)}</td>
                 <td>{renderTargetCcSelector(row, index)}</td>
                 <td>
-                  <input
-                    type="text"
-                    value={row.channels}
-                    placeholder="1, 2, 3"
-                    onChange={(e) => updateRow(index, "channels", e.target.value)}
+                  <ChannelSelector
+                    channels={row.channels}
+                    onChange={(channels) => updateRow(index, "channels", channels)}
                   />
                 </td>
                 <td>

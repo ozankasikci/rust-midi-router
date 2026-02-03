@@ -86,3 +86,11 @@ export async function startClockMonitor(
   channel.onmessage = onClockState;
   return invoke("start_clock_monitor", { onEvent: channel });
 }
+
+export async function sendTransportStart(): Promise<void> {
+  return invoke("send_transport_start");
+}
+
+export async function sendTransportStop(): Promise<void> {
+  return invoke("send_transport_stop");
+}

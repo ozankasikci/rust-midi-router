@@ -382,18 +382,68 @@
 .clock-control {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-3);
   padding-left: var(--space-4);
   border-left: var(--border-width-thin) solid var(--color-border-default);
 }
 
-.clock-control label {
+/* Transport buttons */
+.transport-buttons {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.transport-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--size-control-sm);
+  height: var(--size-control-sm);
+  background: var(--color-bg-elevated);
+  border: var(--border-width-thin) solid var(--color-border-default);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.transport-btn:hover {
+  background: var(--color-bg-hover);
+  border-color: var(--color-border-strong);
+  color: var(--color-text-primary);
+}
+
+.transport-btn.play-btn:hover,
+.transport-btn.play-btn.active {
+  color: var(--color-accent-success);
+  border-color: var(--color-accent-success);
+  background: var(--color-accent-success-bg);
+}
+
+.transport-btn.play-btn.active {
+  box-shadow: var(--shadow-glow-success);
+}
+
+.transport-btn.stop-btn:hover {
+  color: var(--color-accent-danger);
+  border-color: var(--color-accent-danger);
+  background: var(--color-accent-danger-bg);
+}
+
+/* BPM control */
+.bpm-control {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.bpm-control label {
   font-size: var(--font-size-sm);
   color: var(--color-text-muted);
 }
 
-.clock-control input[type="number"] {
-  width: 70px;
+.bpm-control input[type="number"] {
+  width: 60px;
   padding: var(--space-1) var(--space-2);
   background: var(--color-bg-elevated);
   border: var(--border-width-thin) solid var(--color-border-default);
@@ -404,24 +454,9 @@
   text-align: center;
 }
 
-.clock-control input[type="number"]:focus {
+.bpm-control input[type="number"]:focus {
   outline: none;
   border-color: var(--color-border-focus);
-}
-
-.clock-status {
-  font-size: var(--font-size-sm);
-  padding: var(--space-1) var(--space-2);
-  border-radius: var(--radius-sm);
-}
-
-.clock-status.stopped {
-  color: var(--color-text-muted);
-}
-
-.clock-status.playing {
-  color: var(--color-accent-success);
-  background: var(--color-accent-success-bg);
 }
 
 

@@ -55,6 +55,8 @@ pub fn run() {
             commands::set_bpm,
             commands::get_clock_bpm,
             commands::start_clock_monitor,
+            commands::send_transport_start,
+            commands::send_transport_stop,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
