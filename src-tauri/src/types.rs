@@ -116,3 +116,69 @@ pub struct AppConfig {
     pub active_preset_id: Option<Uuid>,
     pub port_aliases: std::collections::HashMap<String, String>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ChannelFilter::All tests
+    #[test]
+    fn channel_filter_all_passes_any_channel() {
+        let filter = ChannelFilter::All;
+        assert!(filter.passes(0));
+        assert!(filter.passes(7));
+        assert!(filter.passes(15));
+    }
+
+    // ChannelFilter::Only tests
+    #[test]
+    fn channel_filter_only_passes_listed_channels() {
+        let filter = ChannelFilter::Only(vec![0, 1, 2]);
+        assert!(filter.passes(0));
+        assert!(filter.passes(1));
+        assert!(filter.passes(2));
+    }
+
+    #[test]
+    fn channel_filter_only_blocks_unlisted_channels() {
+        let filter = ChannelFilter::Only(vec![0, 1, 2]);
+        assert!(!filter.passes(3));
+        assert!(!filter.passes(15));
+    }
+
+    #[test]
+    fn channel_filter_only_empty_blocks_all() {
+        let filter = ChannelFilter::Only(vec![]);
+        assert!(!filter.passes(0));
+        assert!(!filter.passes(15));
+    }
+
+    // ChannelFilter::Except tests
+    #[test]
+    fn channel_filter_except_blocks_listed_channels() {
+        let filter = ChannelFilter::Except(vec![9, 10]);
+        assert!(!filter.passes(9));
+        assert!(!filter.passes(10));
+    }
+
+    #[test]
+    fn channel_filter_except_passes_unlisted_channels() {
+        let filter = ChannelFilter::Except(vec![9, 10]);
+        assert!(filter.passes(0));
+        assert!(filter.passes(8));
+        assert!(filter.passes(15));
+    }
+
+    #[test]
+    fn channel_filter_except_empty_passes_all() {
+        let filter = ChannelFilter::Except(vec![]);
+        assert!(filter.passes(0));
+        assert!(filter.passes(15));
+    }
+
+    #[test]
+    fn channel_filter_default_is_all() {
+        let filter = ChannelFilter::default();
+        assert!(matches!(filter, ChannelFilter::All));
+    }
+}
