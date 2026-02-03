@@ -6,15 +6,27 @@ mod midi;
 mod types;
 
 use commands::AppState;
+use config::preset::get_active_preset;
 use midi::engine::MidiEngine;
 use std::sync::Mutex;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let engine = MidiEngine::new();
+
+    // Load active preset if one exists
+    let initial_routes = get_active_preset()
+        .map(|p| p.routes)
+        .unwrap_or_default();
+
+    // Apply routes to engine
+    if !initial_routes.is_empty() {
+        let _ = engine.set_routes(initial_routes.clone());
+    }
+
     let app_state = AppState {
         engine,
-        routes: Mutex::new(Vec::new()),
+        routes: Mutex::new(initial_routes),
     };
 
     tauri::Builder::default()
