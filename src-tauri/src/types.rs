@@ -39,12 +39,42 @@ impl ChannelFilter {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CcTarget {
+    pub cc: u8,
+    pub channels: Vec<u8>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CcMapping {
+    pub source_cc: u8,
+    pub targets: Vec<CcTarget>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Route {
     pub id: Uuid,
     pub source: PortId,
     pub destination: PortId,
     pub enabled: bool,
     pub channels: ChannelFilter,
+    #[serde(default)]
+    pub cc_passthrough: bool,
+    #[serde(default)]
+    pub cc_mappings: Vec<CcMapping>,
+}
+
+impl Default for Route {
+    fn default() -> Self {
+        Self {
+            id: Uuid::new_v4(),
+            source: PortId::new(String::new()),
+            destination: PortId::new(String::new()),
+            enabled: true,
+            channels: ChannelFilter::default(),
+            cc_passthrough: true,
+            cc_mappings: Vec::new(),
+        }
+    }
 }
 
 impl Route {
@@ -55,6 +85,8 @@ impl Route {
             destination,
             enabled: true,
             channels: ChannelFilter::default(),
+            cc_passthrough: true,
+            cc_mappings: Vec::new(),
         }
     }
 }

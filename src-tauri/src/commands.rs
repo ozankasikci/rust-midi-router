@@ -2,7 +2,7 @@
 
 use crate::config::preset;
 use crate::midi::engine::{EngineEvent, MidiEngine};
-use crate::types::{ChannelFilter, ClockState, MidiActivity, MidiPort, PortId, Preset, Route};
+use crate::types::{CcMapping, ChannelFilter, ClockState, MidiActivity, MidiPort, PortId, Preset, Route};
 use std::sync::Mutex;
 use tauri::{ipc::Channel, State};
 use uuid::Uuid;
@@ -97,6 +97,27 @@ pub fn set_route_channels(
 }
 
 #[tauri::command]
+pub fn set_route_cc_mappings(
+    state: State<AppState>,
+    route_id: String,
+    cc_passthrough: bool,
+    cc_mappings: Vec<CcMapping>,
+) -> Result<(), String> {
+    let uuid = Uuid::parse_str(&route_id).map_err(|e| e.to_string())?;
+
+    {
+        let mut routes = state.routes.lock().unwrap();
+        if let Some(route) = routes.iter_mut().find(|r| r.id == uuid) {
+            route.cc_passthrough = cc_passthrough;
+            route.cc_mappings = cc_mappings;
+        }
+        state.engine.set_routes(routes.clone())?;
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
 pub fn start_midi_monitor(
     state: State<AppState>,
     on_event: Channel<MidiActivity>,
@@ -129,6 +150,13 @@ pub fn list_presets() -> Vec<Preset> {
 pub fn save_preset(state: State<AppState>, name: String) -> Result<Preset, String> {
     let routes = state.routes.lock().unwrap().clone();
     preset::save_preset(name, routes)
+}
+
+#[tauri::command]
+pub fn update_preset(state: State<AppState>, preset_id: String) -> Result<Preset, String> {
+    let id = Uuid::parse_str(&preset_id).map_err(|e| e.to_string())?;
+    let routes = state.routes.lock().unwrap().clone();
+    preset::update_preset(id, routes)
 }
 
 #[tauri::command]

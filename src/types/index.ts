@@ -14,12 +14,24 @@ export type ChannelFilter =
   | { Only: number[] }
   | { Except: number[] };
 
+export interface CcTarget {
+  cc: number;
+  channels: number[];
+}
+
+export interface CcMapping {
+  source_cc: number;
+  targets: CcTarget[];
+}
+
 export interface Route {
   id: string;
   source: PortId;
   destination: PortId;
   enabled: boolean;
   channels: ChannelFilter;
+  cc_passthrough: boolean;
+  cc_mappings: CcMapping[];
 }
 
 export type MessageKind =

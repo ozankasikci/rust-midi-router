@@ -1,6 +1,8 @@
-import { useState, useEffect } from "react";
-import { Route, ChannelFilter } from "../types";
-import { setRouteChannels, removeRoute } from "../hooks/useMidi";
+import { useState, useEffect, useRef, useLayoutEffect } from "react";
+import { Route, ChannelFilter, CcMapping } from "../types";
+import { removeRoute } from "../hooks/useMidi";
+import { useAppStore } from "../stores/appStore";
+import { CcMappingsEditor } from "./CcMappingsEditor";
 
 interface Props {
   route: Route;
@@ -10,13 +12,21 @@ interface Props {
 }
 
 export function ChannelPopup({ route, x, y, onClose }: Props) {
+  const { updateRouteChannels, updateRouteCcMappings } = useAppStore();
+  const [activeTab, setActiveTab] = useState<"channels" | "cc">("channels");
   const [selectedChannels, setSelectedChannels] = useState<Set<number>>(
     new Set()
   );
   const [filterMode, setFilterMode] = useState<"all" | "only" | "except">("all");
+  const [position, setPosition] = useState({ left: x, top: y });
+  const popupRef = useRef<HTMLDivElement>(null);
+
+  // CC mappings state
+  const [ccPassthrough, setCcPassthrough] = useState(route.cc_passthrough ?? true);
+  const [ccMappings, setCcMappings] = useState<CcMapping[]>(route.cc_mappings ?? []);
 
   useEffect(() => {
-    // Initialize from route
+    // Initialize channel filter from route
     const channels = route.channels;
     if (channels === "All") {
       setFilterMode("all");
@@ -28,6 +38,10 @@ export function ChannelPopup({ route, x, y, onClose }: Props) {
       setFilterMode("except");
       setSelectedChannels(new Set(channels.Except));
     }
+
+    // Initialize CC mappings from route
+    setCcPassthrough(route.cc_passthrough ?? true);
+    setCcMappings(route.cc_mappings ?? []);
   }, [route]);
 
   const toggleChannel = (ch: number) => {
@@ -43,6 +57,7 @@ export function ChannelPopup({ route, x, y, onClose }: Props) {
   };
 
   const handleApply = async () => {
+    // Save channel filter
     let filter: ChannelFilter;
     if (filterMode === "all") {
       filter = "All";
@@ -51,15 +66,57 @@ export function ChannelPopup({ route, x, y, onClose }: Props) {
     } else {
       filter = { Except: Array.from(selectedChannels).sort((a, b) => a - b) };
     }
+    await updateRouteChannels(route.id, filter);
 
-    await setRouteChannels(route.id, filter);
+    // Save CC mappings
+    await updateRouteCcMappings(route.id, ccPassthrough, ccMappings);
+
     onClose();
+  };
+
+  const handleCcMappingsChange = (passthrough: boolean, mappings: CcMapping[]) => {
+    setCcPassthrough(passthrough);
+    setCcMappings(mappings);
   };
 
   const handleDelete = async () => {
     await removeRoute(route.id);
     onClose();
   };
+
+  // Adjust position to keep popup within viewport
+  useLayoutEffect(() => {
+    if (!popupRef.current) return;
+
+    const popup = popupRef.current;
+    const rect = popup.getBoundingClientRect();
+    const padding = 8; // Minimum distance from edge
+
+    let newLeft = x;
+    let newTop = y;
+
+    // Check right edge
+    if (x + rect.width > window.innerWidth - padding) {
+      newLeft = window.innerWidth - rect.width - padding;
+    }
+
+    // Check bottom edge
+    if (y + rect.height > window.innerHeight - padding) {
+      newTop = window.innerHeight - rect.height - padding;
+    }
+
+    // Check left edge
+    if (newLeft < padding) {
+      newLeft = padding;
+    }
+
+    // Check top edge
+    if (newTop < padding) {
+      newTop = padding;
+    }
+
+    setPosition({ left: newLeft, top: newTop });
+  }, [x, y, activeTab]); // Re-run when tab changes since size may differ
 
   // Close on click outside
   useEffect(() => {
@@ -75,54 +132,84 @@ export function ChannelPopup({ route, x, y, onClose }: Props) {
 
   return (
     <div
+      ref={popupRef}
       className="channel-popup"
-      style={{ left: x, top: y, position: "fixed" }}
+      style={{ left: position.left, top: position.top, position: "fixed" }}
     >
       <div className="popup-header">
-        <span>Channel Filter</span>
+        <span>{route.source.display_name} → {route.destination.display_name}</span>
         <button onClick={onClose}>×</button>
       </div>
 
-      <div className="filter-mode">
-        <label>
-          <input
-            type="radio"
-            checked={filterMode === "all"}
-            onChange={() => setFilterMode("all")}
-          />
-          All channels
-        </label>
-        <label>
-          <input
-            type="radio"
-            checked={filterMode === "only"}
-            onChange={() => setFilterMode("only")}
-          />
-          Only selected
-        </label>
-        <label>
-          <input
-            type="radio"
-            checked={filterMode === "except"}
-            onChange={() => setFilterMode("except")}
-          />
-          All except selected
-        </label>
+      <div className="popup-tabs">
+        <button
+          className={activeTab === "channels" ? "active" : ""}
+          onClick={() => setActiveTab("channels")}
+        >
+          Channels
+        </button>
+        <button
+          className={activeTab === "cc" ? "active" : ""}
+          onClick={() => setActiveTab("cc")}
+        >
+          CC Mappings
+        </button>
       </div>
 
-      {filterMode !== "all" && (
-        <div className="channel-grid">
-          {Array.from({ length: 16 }, (_, i) => i + 1).map((ch) => (
-            <label key={ch} className="channel-checkbox">
+      {activeTab === "channels" && (
+        <>
+          <div className="filter-mode">
+            <label>
               <input
-                type="checkbox"
-                checked={selectedChannels.has(ch)}
-                onChange={() => toggleChannel(ch)}
+                type="radio"
+                checked={filterMode === "all"}
+                onChange={() => setFilterMode("all")}
               />
-              {ch}
+              All channels
             </label>
-          ))}
-        </div>
+            <label>
+              <input
+                type="radio"
+                checked={filterMode === "only"}
+                onChange={() => setFilterMode("only")}
+              />
+              Only selected
+            </label>
+            <label>
+              <input
+                type="radio"
+                checked={filterMode === "except"}
+                onChange={() => setFilterMode("except")}
+              />
+              All except selected
+            </label>
+          </div>
+
+          {filterMode !== "all" && (
+            <div className="channel-grid">
+              {Array.from({ length: 16 }, (_, i) => i + 1).map((ch) => (
+                <label key={ch} className="channel-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={selectedChannels.has(ch)}
+                    onChange={() => toggleChannel(ch)}
+                  />
+                  {ch}
+                </label>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {activeTab === "cc" && (
+        <CcMappingsEditor
+          ccPassthrough={ccPassthrough}
+          ccMappings={ccMappings}
+          sourcePort={route.source.name}
+          destinationPort={route.destination.name}
+          onChange={handleCcMappingsChange}
+        />
       )}
 
       <div className="popup-actions">

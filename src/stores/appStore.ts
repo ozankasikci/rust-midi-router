@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { MidiPort, Route, MidiActivity } from "../types";
+import { MidiPort, Route, MidiActivity, CcMapping, ChannelFilter } from "../types";
 import * as api from "../hooks/useMidi";
 
 interface AppState {
@@ -18,9 +18,12 @@ interface AppState {
 
   // Actions
   refreshPorts: () => Promise<void>;
+  refreshRoutes: () => Promise<void>;
   addRoute: (sourceName: string, destName: string) => Promise<void>;
   removeRoute: (routeId: string) => Promise<void>;
   toggleRoute: (routeId: string) => Promise<void>;
+  updateRouteChannels: (routeId: string, filter: ChannelFilter) => Promise<void>;
+  updateRouteCcMappings: (routeId: string, ccPassthrough: boolean, ccMappings: CcMapping[]) => Promise<void>;
   startMonitor: () => Promise<void>;
   clearLog: () => void;
 }
@@ -41,10 +44,21 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const [inputs, outputs] = await api.getPorts();
       set({ inputPorts: inputs, outputPorts: outputs });
+      // Also refresh routes when refreshing ports
+      await get().refreshRoutes();
     } catch (e) {
       console.error("Failed to refresh ports:", e);
     } finally {
       set({ loadingPorts: false });
+    }
+  },
+
+  refreshRoutes: async () => {
+    try {
+      const routes = await api.getRoutes();
+      set({ routes });
+    } catch (e) {
+      console.error("Failed to refresh routes:", e);
     }
   },
 
@@ -65,6 +79,24 @@ export const useAppStore = create<AppState>((set, get) => ({
     set((state) => ({
       routes: state.routes.map((r) =>
         r.id === routeId ? { ...r, enabled: newEnabled } : r
+      ),
+    }));
+  },
+
+  updateRouteChannels: async (routeId: string, filter: ChannelFilter) => {
+    await api.setRouteChannels(routeId, filter);
+    set((state) => ({
+      routes: state.routes.map((r) =>
+        r.id === routeId ? { ...r, channels: filter } : r
+      ),
+    }));
+  },
+
+  updateRouteCcMappings: async (routeId: string, ccPassthrough: boolean, ccMappings: CcMapping[]) => {
+    await api.setRouteCcMappings(routeId, ccPassthrough, ccMappings);
+    set((state) => ({
+      routes: state.routes.map((r) =>
+        r.id === routeId ? { ...r, cc_passthrough: ccPassthrough, cc_mappings: ccMappings } : r
       ),
     }));
   },

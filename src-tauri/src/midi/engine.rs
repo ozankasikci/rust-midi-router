@@ -1,5 +1,5 @@
 use crate::midi::ports::{list_input_ports, list_output_ports};
-use crate::midi::router::{parse_midi_message, should_route};
+use crate::midi::router::{apply_cc_mappings, parse_midi_message, should_route};
 use crate::types::{ClockState, MidiActivity, MidiPort, Route};
 use crossbeam_channel::{bounded, Receiver, Sender};
 use midir::{MidiInput, MidiInputConnection, MidiOutput, MidiOutputConnection};
@@ -128,7 +128,19 @@ fn engine_loop(cmd_rx: Receiver<EngineCommand>, event_tx: Sender<EngineEvent>) {
             };
 
             if should_tick {
-                last_clock_tick = Some(now);
+                // Increment by interval instead of setting to now to prevent drift
+                last_clock_tick = Some(match last_clock_tick {
+                    None => now,
+                    Some(last) => {
+                        // If we've fallen too far behind (>2 intervals), reset to now
+                        let next = last + clock_interval;
+                        if now.duration_since(next) > clock_interval {
+                            now
+                        } else {
+                            next
+                        }
+                    }
+                });
                 let mut outputs_guard = output_connections.lock().unwrap();
                 for (name, conn) in outputs_guard.iter_mut() {
                     if let Err(e) = conn.send(&[0xF8]) {
@@ -222,11 +234,16 @@ fn engine_loop(cmd_rx: Receiver<EngineCommand>, event_tx: Sender<EngineEvent>) {
                     continue;
                 }
 
+                // Apply CC mappings - may produce 0, 1, or multiple output messages
+                let output_messages = apply_cc_mappings(&bytes, route);
+
                 if let Some(out_conn) = outputs_guard.get_mut(&route.destination.name) {
-                    eprintln!("[ROUTE] Sending {:02X?} to {}", bytes, route.destination.name);
-                    match out_conn.send(&bytes) {
-                        Ok(_) => {},
-                        Err(e) => eprintln!("[ROUTE] Send error: {:?}", e),
+                    for msg in output_messages {
+                        eprintln!("[ROUTE] Sending {:02X?} to {}", msg, route.destination.name);
+                        match out_conn.send(&msg) {
+                            Ok(_) => {}
+                            Err(e) => eprintln!("[ROUTE] Send error: {:?}", e),
+                        }
                     }
                 } else {
                     eprintln!("[ROUTE] Output not connected: {}", route.destination.name);

@@ -1,6 +1,6 @@
 //! Route matching and message forwarding
 
-use crate::types::{MessageKind, MidiActivity};
+use crate::types::{MessageKind, MidiActivity, Route};
 use wmidi::MidiMessage;
 
 pub fn parse_midi_message(timestamp: u64, port: &str, bytes: &[u8]) -> Option<MidiActivity> {
@@ -108,6 +108,52 @@ pub fn should_route(bytes: &[u8], filter: &crate::types::ChannelFilter) -> bool 
     match get_channel_from_bytes(bytes) {
         Some(ch) => filter.passes(ch),
         None => true, // System messages always pass
+    }
+}
+
+/// Check if a message is a Control Change message
+pub fn is_cc_message(bytes: &[u8]) -> bool {
+    if bytes.len() >= 3 {
+        let status = bytes[0];
+        // CC messages have status 0xB0-0xBF
+        (status & 0xF0) == 0xB0
+    } else {
+        false
+    }
+}
+
+/// Apply CC mappings to transform incoming CC messages.
+/// Returns a list of output messages (may be empty, one, or multiple).
+/// Non-CC messages are returned unchanged.
+pub fn apply_cc_mappings(bytes: &[u8], route: &Route) -> Vec<Vec<u8>> {
+    // Non-CC messages always pass through unchanged
+    if !is_cc_message(bytes) {
+        return vec![bytes.to_vec()];
+    }
+
+    let cc_num = bytes[1];
+    let value = bytes[2];
+
+    // Check if this CC has mappings
+    if let Some(mapping) = route.cc_mappings.iter().find(|m| m.source_cc == cc_num) {
+        // Generate output messages for each target
+        mapping
+            .targets
+            .iter()
+            .flat_map(|target| {
+                target.channels.iter().map(move |ch| {
+                    // Channel in mapping is 1-16, MIDI uses 0-15
+                    let channel = if *ch > 0 { ch - 1 } else { 0 };
+                    vec![0xB0 | channel, target.cc, value]
+                })
+            })
+            .collect()
+    } else if route.cc_passthrough {
+        // No mapping, pass through unchanged
+        vec![bytes.to_vec()]
+    } else {
+        // No mapping, block
+        vec![]
     }
 }
 
@@ -235,5 +281,116 @@ mod tests {
         let filter = ChannelFilter::Only(vec![0]); // Only ch 0
         assert!(should_route(&[0xF0, 0x7E, 0xF7], &filter)); // SysEx passes
         assert!(should_route(&[0xF8], &filter)); // Clock passes
+    }
+
+    // is_cc_message tests
+    #[test]
+    fn is_cc_message_identifies_cc() {
+        assert!(is_cc_message(&[0xB0, 1, 64])); // CC ch 0
+        assert!(is_cc_message(&[0xBF, 74, 127])); // CC ch 15
+    }
+
+    #[test]
+    fn is_cc_message_rejects_non_cc() {
+        assert!(!is_cc_message(&[0x90, 60, 100])); // Note On
+        assert!(!is_cc_message(&[0x80, 60, 0])); // Note Off
+        assert!(!is_cc_message(&[0xC0, 5])); // Program Change
+        assert!(!is_cc_message(&[0xF8])); // Clock
+        assert!(!is_cc_message(&[])); // Empty
+    }
+
+    // apply_cc_mappings tests
+    use crate::types::{CcMapping, CcTarget, PortId, Route};
+
+    fn make_test_route(cc_passthrough: bool, mappings: Vec<CcMapping>) -> Route {
+        Route {
+            id: uuid::Uuid::new_v4(),
+            source: PortId::new("Test In".to_string()),
+            destination: PortId::new("Test Out".to_string()),
+            enabled: true,
+            channels: ChannelFilter::All,
+            cc_passthrough,
+            cc_mappings: mappings,
+        }
+    }
+
+    #[test]
+    fn apply_cc_mappings_non_cc_passes_through() {
+        let route = make_test_route(false, vec![]);
+        let note_on = [0x90, 60, 100];
+        let result = apply_cc_mappings(&note_on, &route);
+        assert_eq!(result, vec![note_on.to_vec()]);
+    }
+
+    #[test]
+    fn apply_cc_mappings_unmapped_passthrough_true() {
+        let route = make_test_route(true, vec![]);
+        let cc = [0xB0, 7, 100]; // CC 7 on ch 0
+        let result = apply_cc_mappings(&cc, &route);
+        assert_eq!(result, vec![cc.to_vec()]);
+    }
+
+    #[test]
+    fn apply_cc_mappings_unmapped_passthrough_false() {
+        let route = make_test_route(false, vec![]);
+        let cc = [0xB0, 7, 100]; // CC 7 on ch 0
+        let result = apply_cc_mappings(&cc, &route);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn apply_cc_mappings_single_target() {
+        let mapping = CcMapping {
+            source_cc: 1,
+            targets: vec![CcTarget {
+                cc: 74,
+                channels: vec![1], // Ch 1 (1-indexed)
+            }],
+        };
+        let route = make_test_route(true, vec![mapping]);
+        let cc = [0xB5, 1, 100]; // CC 1 on ch 5 (input channel ignored, output uses target)
+        let result = apply_cc_mappings(&cc, &route);
+        assert_eq!(result, vec![vec![0xB0, 74, 100]]); // CC 74 on ch 0 (0-indexed)
+    }
+
+    #[test]
+    fn apply_cc_mappings_multiple_channels() {
+        let mapping = CcMapping {
+            source_cc: 1,
+            targets: vec![CcTarget {
+                cc: 74,
+                channels: vec![1, 2, 3], // Channels 1, 2, 3 (1-indexed)
+            }],
+        };
+        let route = make_test_route(true, vec![mapping]);
+        let cc = [0xB0, 1, 64];
+        let result = apply_cc_mappings(&cc, &route);
+        assert_eq!(result.len(), 3);
+        assert_eq!(result[0], vec![0xB0, 74, 64]); // Ch 0
+        assert_eq!(result[1], vec![0xB1, 74, 64]); // Ch 1
+        assert_eq!(result[2], vec![0xB2, 74, 64]); // Ch 2
+    }
+
+    #[test]
+    fn apply_cc_mappings_multiple_targets() {
+        let mapping = CcMapping {
+            source_cc: 1,
+            targets: vec![
+                CcTarget {
+                    cc: 74,
+                    channels: vec![1],
+                },
+                CcTarget {
+                    cc: 71,
+                    channels: vec![1],
+                },
+            ],
+        };
+        let route = make_test_route(true, vec![mapping]);
+        let cc = [0xB0, 1, 127];
+        let result = apply_cc_mappings(&cc, &route);
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0], vec![0xB0, 74, 127]); // CC 74
+        assert_eq!(result[1], vec![0xB0, 71, 127]); // CC 71
     }
 }

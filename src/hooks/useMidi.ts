@@ -1,5 +1,5 @@
 import { invoke, Channel } from "@tauri-apps/api/core";
-import { MidiPort, Route, ChannelFilter, MidiActivity, Preset, ClockState } from "../types";
+import { MidiPort, Route, ChannelFilter, MidiActivity, Preset, ClockState, CcMapping } from "../types";
 
 export async function getPorts(): Promise<[MidiPort[], MidiPort[]]> {
   return invoke("get_ports");
@@ -31,6 +31,14 @@ export async function setRouteChannels(
   return invoke("set_route_channels", { routeId, filter });
 }
 
+export async function setRouteCcMappings(
+  routeId: string,
+  ccPassthrough: boolean,
+  ccMappings: CcMapping[]
+): Promise<void> {
+  return invoke("set_route_cc_mappings", { routeId, ccPassthrough, ccMappings });
+}
+
 export async function startMidiMonitor(
   onActivity: (activity: MidiActivity) => void
 ): Promise<void> {
@@ -45,6 +53,10 @@ export async function listPresets(): Promise<Preset[]> {
 
 export async function savePreset(name: string): Promise<Preset> {
   return invoke("save_preset", { name });
+}
+
+export async function updatePreset(presetId: string): Promise<Preset> {
+  return invoke("update_preset", { presetId });
 }
 
 export async function loadPreset(presetId: string): Promise<Preset> {
