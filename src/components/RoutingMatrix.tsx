@@ -9,6 +9,7 @@ export function RoutingMatrix() {
     outputPorts,
     routes,
     portActivity,
+    loadingPorts,
     refreshPorts,
     addRoute,
     toggleRoute,
@@ -59,6 +60,11 @@ export function RoutingMatrix() {
 
   return (
     <div className="routing-matrix">
+      <div className="matrix-toolbar">
+        <button onClick={() => refreshPorts()} disabled={loadingPorts}>
+          {loadingPorts ? "Refreshing..." : "Refresh Ports"}
+        </button>
+      </div>
       <table>
         <thead>
           <tr>
