@@ -254,7 +254,17 @@ fn engine_loop(cmd_rx: Receiver<EngineCommand>, event_tx: Sender<EngineEvent>) {
         // Check for commands (with short timeout for clock accuracy)
         match cmd_rx.recv_timeout(Duration::from_millis(1)) {
             Ok(EngineCommand::RefreshPorts) => {
+                // Close all connections to force CoreMIDI to refresh port list
+                eprintln!("[ENGINE] Refreshing ports - closing {} inputs, {} outputs",
+                    input_connections.len(), output_connections.lock().unwrap().len());
+                input_connections.clear();
+                output_connections.lock().unwrap().clear();
+
+                // Small delay to let CoreMIDI update
+                std::thread::sleep(Duration::from_millis(100));
+
                 let (inputs, outputs) = (list_input_ports(), list_output_ports());
+                eprintln!("[ENGINE] After refresh: {} inputs, {} outputs", inputs.len(), outputs.len());
                 let _ = event_tx.send(EngineEvent::PortsChanged { inputs, outputs });
             }
             Ok(EngineCommand::SetRoutes(new_routes)) => {

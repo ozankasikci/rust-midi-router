@@ -14,12 +14,24 @@ pub struct AppState {
 }
 
 #[tauri::command]
-pub fn get_ports(_state: State<AppState>) -> Result<(Vec<MidiPort>, Vec<MidiPort>), String> {
+pub fn get_ports(state: State<AppState>) -> Result<(Vec<MidiPort>, Vec<MidiPort>), String> {
     use crate::midi::ports::{list_input_ports, list_output_ports};
+
+    // Trigger engine to close connections so CoreMIDI refreshes port list
+    state.engine.refresh_ports()?;
+    // Small delay to let the engine process the refresh
+    std::thread::sleep(std::time::Duration::from_millis(150));
 
     let inputs = list_input_ports();
     let outputs = list_output_ports();
     eprintln!("[CMD] get_ports: {} inputs, {} outputs", inputs.len(), outputs.len());
+
+    // Re-apply existing routes to reconnect to ports
+    let routes = state.routes.lock().unwrap().clone();
+    if !routes.is_empty() {
+        state.engine.set_routes(routes)?;
+    }
+
     Ok((inputs, outputs))
 }
 

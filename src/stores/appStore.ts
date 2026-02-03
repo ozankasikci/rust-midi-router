@@ -43,7 +43,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ loadingPorts: true });
     try {
       const [inputs, outputs] = await api.getPorts();
-      set({ inputPorts: inputs, outputPorts: outputs });
+      console.log("[Store] refreshPorts: inputs=", inputs.length, "outputs=", outputs.length);
+      // Force new array references to ensure React re-renders
+      set({ inputPorts: [...inputs], outputPorts: [...outputs] });
       // Also refresh routes when refreshing ports
       await get().refreshRoutes();
     } catch (e) {
