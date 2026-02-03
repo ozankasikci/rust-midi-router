@@ -2,6 +2,37 @@ import { useState, useEffect, useRef } from "react";
 import { Preset } from "../types";
 import * as api from "../hooks/useMidi";
 import { useAppStore } from "../stores/appStore";
+import { Select, Button, IconButton, Dialog, Menu, MenuItem, Input } from "./ui";
+
+// Icons
+const SaveIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+    <polyline points="17 21 17 13 7 13 7 21"/>
+    <polyline points="7 3 7 8 15 8"/>
+  </svg>
+);
+
+const MenuIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+    <circle cx="12" cy="5" r="2"/>
+    <circle cx="12" cy="12" r="2"/>
+    <circle cx="12" cy="19" r="2"/>
+  </svg>
+);
+
+const PlusIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M12 5v14M5 12h14"/>
+  </svg>
+);
+
+const TrashIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <polyline points="3 6 5 6 21 6"/>
+    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+  </svg>
+);
 
 export function PresetBar() {
   const { refreshRoutes } = useAppStore();
@@ -10,24 +41,11 @@ export function PresetBar() {
   const [showMenu, setShowMenu] = useState(false);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [newPresetName, setNewPresetName] = useState("");
-  const menuRef = useRef<HTMLDivElement>(null);
+  const menuContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     loadPresets();
   }, []);
-
-  // Close menu on outside click
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setShowMenu(false);
-      }
-    };
-    if (showMenu) {
-      document.addEventListener("mousedown", handleClickOutside);
-      return () => document.removeEventListener("mousedown", handleClickOutside);
-    }
-  }, [showMenu]);
 
   const loadPresets = async () => {
     const [list, activeId] = await Promise.all([
@@ -70,94 +88,97 @@ export function PresetBar() {
   return (
     <div className="preset-control">
       {/* Preset selector */}
-      <div className="preset-selector">
-        <select
-          value={activePresetId || ""}
-          onChange={(e) => e.target.value && handleLoad(e.target.value)}
-        >
-          <option value="">No Preset</option>
-          {presets.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
-      </div>
+      <Select
+        value={activePresetId || ""}
+        onChange={(e) => e.target.value && handleLoad(e.target.value)}
+        size="sm"
+        style={{ minWidth: 120, borderRadius: "var(--radius-md) 0 0 var(--radius-md)" }}
+      >
+        <option value="">No Preset</option>
+        {presets.map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.name}
+          </option>
+        ))}
+      </Select>
 
       {/* Save button - only when preset selected */}
       {activePresetId && (
-        <button
-          className="preset-btn save-btn"
+        <IconButton
+          icon={<SaveIcon />}
           onClick={handleSave}
           title="Save preset"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
-            <polyline points="17 21 17 13 7 13 7 21"/>
-            <polyline points="7 3 7 8 15 8"/>
-          </svg>
-        </button>
+          size="sm"
+          style={{ borderRadius: 0, borderLeft: "none" }}
+        />
       )}
 
       {/* Menu button */}
-      <div className="preset-menu-container" ref={menuRef}>
-        <button
-          className={`preset-btn menu-btn ${showMenu ? 'active' : ''}`}
+      <div className="preset-menu-container" ref={menuContainerRef}>
+        <IconButton
+          icon={<MenuIcon />}
           onClick={() => setShowMenu(!showMenu)}
           title="Preset options"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-            <circle cx="12" cy="5" r="2"/>
-            <circle cx="12" cy="12" r="2"/>
-            <circle cx="12" cy="19" r="2"/>
-          </svg>
-        </button>
+          size="sm"
+          active={showMenu}
+          style={{
+            borderRadius: activePresetId ? "0 var(--radius-md) var(--radius-md) 0" : "0 var(--radius-md) var(--radius-md) 0",
+            borderLeft: "none"
+          }}
+        />
 
-        {showMenu && (
-          <div className="preset-menu">
-            <button onClick={() => { setShowSaveDialog(true); setShowMenu(false); }}>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M12 5v14M5 12h14"/>
-              </svg>
-              Save as new...
-            </button>
-            {activePresetId && (
-              <button className="danger" onClick={handleDelete}>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polyline points="3 6 5 6 21 6"/>
-                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                </svg>
-                Delete preset
-              </button>
-            )}
-          </div>
-        )}
+        <Menu open={showMenu} onClose={() => setShowMenu(false)}>
+          <MenuItem
+            icon={<PlusIcon />}
+            onClick={() => { setShowSaveDialog(true); setShowMenu(false); }}
+          >
+            Save as new...
+          </MenuItem>
+          {activePresetId && (
+            <MenuItem
+              icon={<TrashIcon />}
+              onClick={handleDelete}
+              danger
+            >
+              Delete preset
+            </MenuItem>
+          )}
+        </Menu>
       </div>
 
       {/* Save dialog */}
-      {showSaveDialog && (
-        <>
-          <div className="preset-dialog-backdrop" onClick={() => setShowSaveDialog(false)} />
-          <div className="preset-dialog">
-            <div className="preset-dialog-header">Save New Preset</div>
-            <input
-              type="text"
-              placeholder="Preset name"
-              value={newPresetName}
-              onChange={(e) => setNewPresetName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleSaveAs();
-                if (e.key === "Escape") setShowSaveDialog(false);
-              }}
-              autoFocus
-            />
-            <div className="preset-dialog-actions">
-              <button className="cancel" onClick={() => setShowSaveDialog(false)}>Cancel</button>
-              <button className="confirm" onClick={handleSaveAs} disabled={!newPresetName.trim()}>Save</button>
-            </div>
-          </div>
-        </>
-      )}
+      <Dialog
+        open={showSaveDialog}
+        onClose={() => setShowSaveDialog(false)}
+        title="Save New Preset"
+        actions={
+          <>
+            <Button variant="ghost" onClick={() => setShowSaveDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleSaveAs}
+              disabled={!newPresetName.trim()}
+            >
+              Save
+            </Button>
+          </>
+        }
+      >
+        <Input
+          type="text"
+          placeholder="Preset name"
+          value={newPresetName}
+          onChange={(e) => setNewPresetName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") handleSaveAs();
+            if (e.key === "Escape") setShowSaveDialog(false);
+          }}
+          inputSize="md"
+          style={{ width: "100%" }}
+        />
+      </Dialog>
     </div>
   );
 }

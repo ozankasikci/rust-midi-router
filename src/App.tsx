@@ -3,6 +3,7 @@ import { RoutingMatrix } from "./components/RoutingMatrix";
 import { MonitorLog } from "./components/MonitorLog";
 import { PresetBar } from "./components/PresetBar";
 import { ClockControl } from "./components/ClockControl";
+import "./styles/design-tokens.css";
 import "./App.css";
 
 type Tab = "matrix" | "monitor";
