@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -85,4 +86,33 @@ pub struct MidiActivity {
     pub channel: Option<u8>,
     pub kind: MessageKind,
     pub raw: Vec<u8>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Preset {
+    pub id: Uuid,
+    pub name: String,
+    pub routes: Vec<Route>,
+    pub created_at: DateTime<Utc>,
+    pub modified_at: DateTime<Utc>,
+}
+
+impl Preset {
+    pub fn new(name: String, routes: Vec<Route>) -> Self {
+        let now = Utc::now();
+        Self {
+            id: Uuid::new_v4(),
+            name,
+            routes,
+            created_at: now,
+            modified_at: now,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct AppConfig {
+    pub presets: Vec<Preset>,
+    pub active_preset_id: Option<Uuid>,
+    pub port_aliases: std::collections::HashMap<String, String>,
 }
