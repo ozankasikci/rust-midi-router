@@ -354,3 +354,48 @@ body {
   border-radius: 4px;
   color: #e0e0e0;
 }
+
+/* Clock Control */
+.clock-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 16px;
+  border-left: 1px solid #444;
+}
+
+.clock-control label {
+  font-size: 13px;
+  color: #888;
+}
+
+.clock-control input[type="number"] {
+  width: 70px;
+  padding: 6px 8px;
+  background: #333;
+  border: 1px solid #444;
+  border-radius: 4px;
+  color: #e0e0e0;
+  font-size: 13px;
+  text-align: center;
+}
+
+.clock-control input[type="number"]:focus {
+  outline: none;
+  border-color: #1976d2;
+}
+
+.clock-status {
+  font-size: 13px;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.clock-status.stopped {
+  color: #888;
+}
+
+.clock-status.playing {
+  color: #4caf50;
+  background: rgba(76, 175, 80, 0.15);
+}

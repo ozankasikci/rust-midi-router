@@ -17,15 +17,16 @@ export function ChannelPopup({ route, x, y, onClose }: Props) {
 
   useEffect(() => {
     // Initialize from route
-    if ("All" in route.channels) {
+    const channels = route.channels;
+    if (channels === "All") {
       setFilterMode("all");
       setSelectedChannels(new Set());
-    } else if ("Only" in route.channels) {
+    } else if ("Only" in channels) {
       setFilterMode("only");
-      setSelectedChannels(new Set(route.channels.Only));
-    } else if ("Except" in route.channels) {
+      setSelectedChannels(new Set(channels.Only));
+    } else if ("Except" in channels) {
       setFilterMode("except");
-      setSelectedChannels(new Set(route.channels.Except));
+      setSelectedChannels(new Set(channels.Except));
     }
   }, [route]);
 
@@ -44,7 +45,7 @@ export function ChannelPopup({ route, x, y, onClose }: Props) {
   const handleApply = async () => {
     let filter: ChannelFilter;
     if (filterMode === "all") {
-      filter = { All: null };
+      filter = "All";
     } else if (filterMode === "only") {
       filter = { Only: Array.from(selectedChannels).sort((a, b) => a - b) };
     } else {

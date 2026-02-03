@@ -1,5 +1,5 @@
 import { invoke, Channel } from "@tauri-apps/api/core";
-import { MidiPort, Route, ChannelFilter, MidiActivity, Preset } from "../types";
+import { MidiPort, Route, ChannelFilter, MidiActivity, Preset, ClockState } from "../types";
 
 export async function getPorts(): Promise<[MidiPort[], MidiPort[]]> {
   return invoke("get_ports");
@@ -57,4 +57,20 @@ export async function deletePreset(presetId: string): Promise<void> {
 
 export async function getActivePresetId(): Promise<string | null> {
   return invoke("get_active_preset_id");
+}
+
+export async function setBpm(bpm: number): Promise<void> {
+  return invoke("set_bpm", { bpm });
+}
+
+export async function getClockBpm(): Promise<number> {
+  return invoke("get_clock_bpm");
+}
+
+export async function startClockMonitor(
+  onClockState: (state: ClockState) => void
+): Promise<void> {
+  const channel = new Channel<ClockState>();
+  channel.onmessage = onClockState;
+  return invoke("start_clock_monitor", { onEvent: channel });
 }

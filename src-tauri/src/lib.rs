@@ -6,7 +6,7 @@ mod midi;
 mod types;
 
 use commands::AppState;
-use config::preset::get_active_preset;
+use config::preset::{get_active_preset, get_clock_bpm};
 use midi::engine::MidiEngine;
 use std::sync::Mutex;
 
@@ -24,9 +24,14 @@ pub fn run() {
         let _ = engine.set_routes(initial_routes.clone());
     }
 
+    // Load clock BPM from config
+    let clock_bpm = get_clock_bpm();
+    let _ = engine.set_bpm(clock_bpm);
+
     let app_state = AppState {
         engine,
         routes: Mutex::new(initial_routes),
+        clock_bpm: Mutex::new(clock_bpm),
     };
 
     tauri::Builder::default()
@@ -45,6 +50,9 @@ pub fn run() {
             commands::load_preset,
             commands::delete_preset,
             commands::get_active_preset_id,
+            commands::set_bpm,
+            commands::get_clock_bpm,
+            commands::start_clock_monitor,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -27,6 +27,18 @@ function formatMessage(kind: MessageKind): string {
   if (kind.kind === "SysEx") {
     return "SysEx";
   }
+  if (kind.kind === "Clock") {
+    return "Clock";
+  }
+  if (kind.kind === "Start") {
+    return "▶ Start";
+  }
+  if (kind.kind === "Continue") {
+    return "▶ Continue";
+  }
+  if (kind.kind === "Stop") {
+    return "■ Stop";
+  }
   return "Other";
 }
 

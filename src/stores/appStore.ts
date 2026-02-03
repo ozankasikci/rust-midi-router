@@ -41,6 +41,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const [inputs, outputs] = await api.getPorts();
       set({ inputPorts: inputs, outputPorts: outputs });
+    } catch (e) {
+      console.error("Failed to refresh ports:", e);
     } finally {
       set({ loadingPorts: false });
     }

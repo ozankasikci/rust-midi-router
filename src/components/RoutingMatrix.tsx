@@ -22,8 +22,9 @@ export function RoutingMatrix() {
   } | null>(null);
 
   useEffect(() => {
-    refreshPorts();
-  }, [refreshPorts]);
+    refreshPorts().catch(console.error);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const getRoute = (inputName: string, outputName: string): Route | undefined => {
     return routes.find(

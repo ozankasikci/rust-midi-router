@@ -2,6 +2,7 @@ import { useState } from "react";
 import { RoutingMatrix } from "./components/RoutingMatrix";
 import { MonitorLog } from "./components/MonitorLog";
 import { PresetBar } from "./components/PresetBar";
+import { ClockControl } from "./components/ClockControl";
 import "./App.css";
 
 type Tab = "matrix" | "monitor";
@@ -14,11 +15,16 @@ function App() {
       <header className="app-header">
         <h1>MIDI Router</h1>
         <PresetBar />
+        <ClockControl />
       </header>
 
       <main className="app-main">
-        {activeTab === "matrix" && <RoutingMatrix />}
-        {activeTab === "monitor" && <MonitorLog />}
+        <div style={{ display: activeTab === "matrix" ? "block" : "none" }}>
+          <RoutingMatrix />
+        </div>
+        <div style={{ display: activeTab === "monitor" ? "block" : "none" }}>
+          <MonitorLog />
+        </div>
       </main>
 
       <nav className="app-tabs">

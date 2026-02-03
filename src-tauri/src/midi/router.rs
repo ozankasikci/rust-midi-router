@@ -4,6 +4,27 @@ use crate::types::{MessageKind, MidiActivity};
 use wmidi::MidiMessage;
 
 pub fn parse_midi_message(timestamp: u64, port: &str, bytes: &[u8]) -> Option<MidiActivity> {
+    // Handle system real-time messages first (single byte, 0xF8-0xFF)
+    // These may not be parsed by wmidi but are important for transport
+    if bytes.len() == 1 {
+        let kind = match bytes[0] {
+            0xF8 => Some(MessageKind::Clock),
+            0xFA => Some(MessageKind::Start),
+            0xFB => Some(MessageKind::Continue),
+            0xFC => Some(MessageKind::Stop),
+            _ => None,
+        };
+        if let Some(kind) = kind {
+            return Some(MidiActivity {
+                timestamp,
+                port: port.to_string(),
+                channel: None,
+                kind,
+                raw: bytes.to_vec(),
+            });
+        }
+    }
+
     let msg = MidiMessage::try_from(bytes).ok()?;
 
     let (channel, kind) = match msg {
@@ -54,6 +75,10 @@ pub fn parse_midi_message(timestamp: u64, port: &str, bytes: &[u8]) -> Option<Mi
             },
         ),
         MidiMessage::SysEx(_) => (None, MessageKind::SysEx),
+        MidiMessage::TimingClock => (None, MessageKind::Clock),
+        MidiMessage::Start => (None, MessageKind::Start),
+        MidiMessage::Continue => (None, MessageKind::Continue),
+        MidiMessage::Stop => (None, MessageKind::Stop),
         _ => (None, MessageKind::Other),
     };
 

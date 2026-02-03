@@ -2,7 +2,7 @@
 
 use crate::config::preset;
 use crate::midi::engine::{EngineEvent, MidiEngine};
-use crate::types::{ChannelFilter, MidiActivity, MidiPort, PortId, Preset, Route};
+use crate::types::{ChannelFilter, ClockState, MidiActivity, MidiPort, PortId, Preset, Route};
 use std::sync::Mutex;
 use tauri::{ipc::Channel, State};
 use uuid::Uuid;
@@ -10,22 +10,17 @@ use uuid::Uuid;
 pub struct AppState {
     pub engine: MidiEngine,
     pub routes: Mutex<Vec<Route>>,
+    pub clock_bpm: Mutex<f64>,
 }
 
 #[tauri::command]
-pub fn get_ports(state: State<AppState>) -> Result<(Vec<MidiPort>, Vec<MidiPort>), String> {
-    state.engine.refresh_ports()?;
+pub fn get_ports(_state: State<AppState>) -> Result<(Vec<MidiPort>, Vec<MidiPort>), String> {
+    use crate::midi::ports::{list_input_ports, list_output_ports};
 
-    // Wait briefly for the response
-    std::thread::sleep(std::time::Duration::from_millis(50));
-
-    while let Some(event) = state.engine.try_recv_event() {
-        if let EngineEvent::PortsChanged { inputs, outputs } = event {
-            return Ok((inputs, outputs));
-        }
-    }
-
-    Ok((Vec::new(), Vec::new()))
+    let inputs = list_input_ports();
+    let outputs = list_output_ports();
+    eprintln!("[CMD] get_ports: {} inputs, {} outputs", inputs.len(), outputs.len());
+    Ok((inputs, outputs))
 }
 
 #[tauri::command]
@@ -160,4 +155,45 @@ pub fn delete_preset(preset_id: String) -> Result<(), String> {
 #[tauri::command]
 pub fn get_active_preset_id() -> Option<String> {
     preset::get_active_preset().map(|p| p.id.to_string())
+}
+
+#[tauri::command]
+pub fn set_bpm(state: State<AppState>, bpm: f64) -> Result<(), String> {
+    let bpm = bpm.clamp(20.0, 300.0);
+    *state.clock_bpm.lock().unwrap() = bpm;
+    state.engine.set_bpm(bpm)?;
+
+    // Persist to config
+    crate::config::preset::set_clock_bpm(bpm)?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_clock_bpm(state: State<AppState>) -> f64 {
+    *state.clock_bpm.lock().unwrap()
+}
+
+#[tauri::command]
+pub fn start_clock_monitor(
+    state: State<AppState>,
+    on_event: Channel<ClockState>,
+) -> Result<(), String> {
+    let event_rx = state.engine.event_receiver();
+
+    std::thread::spawn(move || {
+        loop {
+            match event_rx.recv() {
+                Ok(EngineEvent::ClockStateChanged(clock_state)) => {
+                    if on_event.send(clock_state).is_err() {
+                        break;
+                    }
+                }
+                Ok(_) => {}
+                Err(_) => break,
+            }
+        }
+    });
+
+    Ok(())
 }

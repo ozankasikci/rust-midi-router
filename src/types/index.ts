@@ -8,8 +8,9 @@ export interface MidiPort {
   is_input: boolean;
 }
 
+// Rust serde serializes unit enum variants as strings, tuple variants as objects
 export type ChannelFilter =
-  | { All: null }
+  | "All"
   | { Only: number[] }
   | { Except: number[] };
 
@@ -30,6 +31,10 @@ export type MessageKind =
   | { kind: "Aftertouch"; data: { value: number } }
   | { kind: "PolyAftertouch"; data: { note: number; value: number } }
   | { kind: "SysEx" }
+  | { kind: "Clock" }
+  | { kind: "Start" }
+  | { kind: "Continue" }
+  | { kind: "Stop" }
   | { kind: "Other" };
 
 export interface MidiActivity {
@@ -46,4 +51,9 @@ export interface Preset {
   routes: Route[];
   created_at: string;
   modified_at: string;
+}
+
+export interface ClockState {
+  bpm: number;
+  running: boolean;
 }

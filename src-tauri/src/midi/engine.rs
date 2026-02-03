@@ -1,16 +1,18 @@
 use crate::midi::ports::{list_input_ports, list_output_ports};
 use crate::midi::router::{parse_midi_message, should_route};
-use crate::types::{MidiActivity, MidiPort, Route};
+use crate::types::{ClockState, MidiActivity, MidiPort, Route};
 use crossbeam_channel::{bounded, Receiver, Sender};
 use midir::{MidiInput, MidiInputConnection, MidiOutput, MidiOutputConnection};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::thread;
+use std::time::{Duration, Instant};
 
 #[derive(Debug)]
 pub enum EngineCommand {
     RefreshPorts,
     SetRoutes(Vec<Route>),
+    SetBpm(f64),
     Shutdown,
 }
 
@@ -21,6 +23,7 @@ pub enum EngineEvent {
         outputs: Vec<MidiPort>,
     },
     MidiActivity(MidiActivity),
+    ClockStateChanged(ClockState),
     Error(String),
 }
 
@@ -68,6 +71,10 @@ impl MidiEngine {
         self.send_command(EngineCommand::SetRoutes(routes))
     }
 
+    pub fn set_bpm(&self, bpm: f64) -> Result<(), String> {
+        self.send_command(EngineCommand::SetBpm(bpm))
+    }
+
     pub fn shutdown(&self) -> Result<(), String> {
         self.send_command(EngineCommand::Shutdown)
     }
@@ -91,6 +98,11 @@ fn engine_loop(cmd_rx: Receiver<EngineCommand>, event_tx: Sender<EngineEvent>) {
     // Internal channel for MIDI data from callbacks
     let (midi_tx, midi_rx) = bounded::<(String, u64, Vec<u8>)>(1024);
 
+    // Clock state
+    let mut clock_bpm: f64 = 120.0;
+    let mut clock_running: bool = false;
+    let mut last_clock_tick: Option<Instant> = None;
+
     // Send initial port list
     let (inputs, outputs) = (list_input_ports(), list_output_ports());
     let _ = event_tx.send(EngineEvent::PortsChanged {
@@ -98,15 +110,104 @@ fn engine_loop(cmd_rx: Receiver<EngineCommand>, event_tx: Sender<EngineEvent>) {
         outputs: outputs.clone(),
     });
 
+    // Send initial clock state
+    let _ = event_tx.send(EngineEvent::ClockStateChanged(ClockState {
+        bpm: clock_bpm,
+        running: clock_running,
+    }));
+
     loop {
+        // Generate clock pulses if running
+        if clock_running {
+            let clock_interval = Duration::from_secs_f64(60.0 / clock_bpm / 24.0);
+            let now = Instant::now();
+
+            let should_tick = match last_clock_tick {
+                None => true,
+                Some(last) => now.duration_since(last) >= clock_interval,
+            };
+
+            if should_tick {
+                last_clock_tick = Some(now);
+                let mut outputs_guard = output_connections.lock().unwrap();
+                for (name, conn) in outputs_guard.iter_mut() {
+                    if let Err(e) = conn.send(&[0xF8]) {
+                        eprintln!("[CLOCK] Failed to send clock to {}: {:?}", name, e);
+                    }
+                }
+            }
+        }
+
         // Check for MIDI data from callbacks (non-blocking)
         while let Ok((port_name, timestamp, bytes)) = midi_rx.try_recv() {
+            // Handle transport messages to control clock
+            if !bytes.is_empty() {
+                match bytes[0] {
+                    0xFA => {
+                        eprintln!("[MIDI] START received from {}", port_name);
+                        if !clock_running {
+                            clock_running = true;
+                            last_clock_tick = None; // Reset timing
+                            let _ = event_tx.send(EngineEvent::ClockStateChanged(ClockState {
+                                bpm: clock_bpm,
+                                running: clock_running,
+                            }));
+                        }
+                        // Forward Start to all outputs
+                        let mut outputs_guard = output_connections.lock().unwrap();
+                        for (name, conn) in outputs_guard.iter_mut() {
+                            eprintln!("[CLOCK] Sending START to {}", name);
+                            let _ = conn.send(&[0xFA]);
+                        }
+                    }
+                    0xFB => {
+                        eprintln!("[MIDI] CONTINUE received from {}", port_name);
+                        if !clock_running {
+                            clock_running = true;
+                            // Don't reset timing for continue
+                            let _ = event_tx.send(EngineEvent::ClockStateChanged(ClockState {
+                                bpm: clock_bpm,
+                                running: clock_running,
+                            }));
+                        }
+                        // Forward Continue to all outputs
+                        let mut outputs_guard = output_connections.lock().unwrap();
+                        for (name, conn) in outputs_guard.iter_mut() {
+                            eprintln!("[CLOCK] Sending CONTINUE to {}", name);
+                            let _ = conn.send(&[0xFB]);
+                        }
+                    }
+                    0xFC => {
+                        eprintln!("[MIDI] STOP received from {}", port_name);
+                        if clock_running {
+                            clock_running = false;
+                            let _ = event_tx.send(EngineEvent::ClockStateChanged(ClockState {
+                                bpm: clock_bpm,
+                                running: clock_running,
+                            }));
+                        }
+                        // Forward Stop to all outputs
+                        let mut outputs_guard = output_connections.lock().unwrap();
+                        for (name, conn) in outputs_guard.iter_mut() {
+                            eprintln!("[CLOCK] Sending STOP to {}", name);
+                            let _ = conn.send(&[0xFC]);
+                        }
+                    }
+                    0xF8 => {} // Ignore incoming clock - we generate our own
+                    _ => {}
+                }
+            }
+
             // Parse and send activity event
             if let Some(activity) = parse_midi_message(timestamp, &port_name, &bytes) {
                 let _ = event_tx.send(EngineEvent::MidiActivity(activity));
             }
 
-            // Route the message
+            // Route the message (but not transport - we handle that above)
+            if !bytes.is_empty() && matches!(bytes[0], 0xFA | 0xFB | 0xFC | 0xF8) {
+                continue; // Skip routing for transport/clock messages
+            }
+
             let routes_guard = routes.lock().unwrap();
             let mut outputs_guard = output_connections.lock().unwrap();
 
@@ -122,13 +223,19 @@ fn engine_loop(cmd_rx: Receiver<EngineCommand>, event_tx: Sender<EngineEvent>) {
                 }
 
                 if let Some(out_conn) = outputs_guard.get_mut(&route.destination.name) {
-                    let _ = out_conn.send(&bytes);
+                    eprintln!("[ROUTE] Sending {:02X?} to {}", bytes, route.destination.name);
+                    match out_conn.send(&bytes) {
+                        Ok(_) => {},
+                        Err(e) => eprintln!("[ROUTE] Send error: {:?}", e),
+                    }
+                } else {
+                    eprintln!("[ROUTE] Output not connected: {}", route.destination.name);
                 }
             }
         }
 
-        // Check for commands (with timeout to keep responsive)
-        match cmd_rx.recv_timeout(std::time::Duration::from_millis(10)) {
+        // Check for commands (with short timeout for clock accuracy)
+        match cmd_rx.recv_timeout(Duration::from_millis(1)) {
             Ok(EngineCommand::RefreshPorts) => {
                 let (inputs, outputs) = (list_input_ports(), list_output_ports());
                 let _ = event_tx.send(EngineEvent::PortsChanged { inputs, outputs });
@@ -153,10 +260,14 @@ fn engine_loop(cmd_rx: Receiver<EngineCommand>, event_tx: Sender<EngineEvent>) {
                 // Add new connections
                 for input_name in needed_inputs {
                     if input_connections.contains_key(&input_name) {
+                        eprintln!("[ENGINE] Already connected to input: {}", input_name);
                         continue;
                     }
 
-                    if let Ok(midi_in) = MidiInput::new("midi-router") {
+                    eprintln!("[ENGINE] Connecting to input: {}", input_name);
+                    if let Ok(mut midi_in) = MidiInput::new("midi-router") {
+                        // Don't filter any messages - we want clock, sysex, active sense, etc.
+                        midi_in.ignore(midir::Ignore::None);
                         let port = midi_in.ports().into_iter().find(|p| {
                             midi_in.port_name(p).ok().as_ref() == Some(&input_name)
                         });
@@ -169,20 +280,25 @@ fn engine_loop(cmd_rx: Receiver<EngineCommand>, event_tx: Sender<EngineEvent>) {
                                 &port,
                                 "midi-router-in",
                                 move |timestamp, bytes, _| {
+                                    eprintln!("[CALLBACK] {} bytes from {}: {:02X?}", bytes.len(), name, bytes);
                                     let _ = tx.send((name.clone(), timestamp, bytes.to_vec()));
                                 },
                                 (),
                             ) {
                                 Ok(conn) => {
+                                    eprintln!("[ENGINE] Successfully connected to input: {}", input_name);
                                     input_connections.insert(input_name, conn);
                                 }
                                 Err(e) => {
+                                    eprintln!("[ENGINE] Failed to connect input {}: {}", input_name, e);
                                     let _ = event_tx.send(EngineEvent::Error(format!(
                                         "Failed to connect input: {}",
                                         e
                                     )));
                                 }
                             }
+                        } else {
+                            eprintln!("[ENGINE] Port not found: {}", input_name);
                         }
                     }
                 }
@@ -203,9 +319,11 @@ fn engine_loop(cmd_rx: Receiver<EngineCommand>, event_tx: Sender<EngineEvent>) {
                     // Add new connections
                     for output_name in needed_outputs {
                         if outputs_guard.contains_key(&output_name) {
+                            eprintln!("[ENGINE] Already connected to output: {}", output_name);
                             continue;
                         }
 
+                        eprintln!("[ENGINE] Connecting to output: {}", output_name);
                         if let Ok(midi_out) = MidiOutput::new("midi-router") {
                             let port = midi_out.ports().into_iter().find(|p| {
                                 midi_out.port_name(p).ok().as_ref() == Some(&output_name)
@@ -214,19 +332,31 @@ fn engine_loop(cmd_rx: Receiver<EngineCommand>, event_tx: Sender<EngineEvent>) {
                             if let Some(port) = port {
                                 match midi_out.connect(&port, "midi-router-out") {
                                     Ok(conn) => {
+                                        eprintln!("[ENGINE] Successfully connected to output: {}", output_name);
                                         outputs_guard.insert(output_name, conn);
                                     }
                                     Err(e) => {
+                                        eprintln!("[ENGINE] Failed to connect output {}: {}", output_name, e);
                                         let _ = event_tx.send(EngineEvent::Error(format!(
                                             "Failed to connect output: {}",
                                             e
                                         )));
                                     }
                                 }
+                            } else {
+                                eprintln!("[ENGINE] Output port not found: {}", output_name);
                             }
                         }
                     }
                 }
+            }
+            Ok(EngineCommand::SetBpm(bpm)) => {
+                clock_bpm = bpm.clamp(20.0, 300.0);
+                eprintln!("[CLOCK] BPM set to {}", clock_bpm);
+                let _ = event_tx.send(EngineEvent::ClockStateChanged(ClockState {
+                    bpm: clock_bpm,
+                    running: clock_running,
+                }));
             }
             Ok(EngineCommand::Shutdown) => {
                 break;

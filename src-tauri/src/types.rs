@@ -76,6 +76,11 @@ pub enum MessageKind {
     Aftertouch { value: u8 },
     PolyAftertouch { note: u8, value: u8 },
     SysEx,
+    // Transport/Clock messages
+    Clock,
+    Start,
+    Continue,
+    Stop,
     Other,
 }
 
@@ -110,11 +115,34 @@ impl Preset {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
     pub presets: Vec<Preset>,
     pub active_preset_id: Option<Uuid>,
     pub port_aliases: std::collections::HashMap<String, String>,
+    #[serde(default = "default_clock_bpm")]
+    pub clock_bpm: f64,
+}
+
+fn default_clock_bpm() -> f64 {
+    120.0
+}
+
+impl Default for AppConfig {
+    fn default() -> Self {
+        Self {
+            presets: Vec::new(),
+            active_preset_id: None,
+            port_aliases: std::collections::HashMap::new(),
+            clock_bpm: default_clock_bpm(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClockState {
+    pub bpm: f64,
+    pub running: bool,
 }
 
 #[cfg(test)]

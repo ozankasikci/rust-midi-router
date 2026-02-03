@@ -57,3 +57,14 @@ pub fn get_active_preset() -> Option<Preset> {
         .active_preset_id
         .and_then(|id| config.presets.into_iter().find(|p| p.id == id))
 }
+
+pub fn get_clock_bpm() -> f64 {
+    load_config().clock_bpm
+}
+
+pub fn set_clock_bpm(bpm: f64) -> Result<(), String> {
+    let mut config = load_config();
+    config.clock_bpm = bpm;
+    save_config(&config)?;
+    Ok(())
+}
