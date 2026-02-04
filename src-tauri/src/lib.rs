@@ -9,6 +9,7 @@ use commands::AppState;
 use config::preset::{get_active_preset, get_clock_bpm};
 use midi::engine::MidiEngine;
 use std::sync::Mutex;
+use types::Bpm;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -24,8 +25,8 @@ pub fn run() {
         let _ = engine.set_routes(initial_routes.clone());
     }
 
-    // Load clock BPM from config
-    let clock_bpm = get_clock_bpm();
+    // Load clock BPM from config (clamped to valid range)
+    let clock_bpm = Bpm::clamped(get_clock_bpm()).value();
     let _ = engine.set_bpm(clock_bpm);
 
     let app_state = AppState {
@@ -46,6 +47,7 @@ pub fn run() {
             commands::set_route_channels,
             commands::set_route_cc_mappings,
             commands::start_midi_monitor,
+            commands::start_error_monitor,
             commands::list_presets,
             commands::save_preset,
             commands::update_preset,

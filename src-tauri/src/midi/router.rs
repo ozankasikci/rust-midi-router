@@ -393,4 +393,197 @@ mod tests {
         assert_eq!(result[0], vec![0xB0, 74, 127]); // CC 74
         assert_eq!(result[1], vec![0xB0, 71, 127]); // CC 71
     }
+
+    // ==========================================================================
+    // Additional parse_midi_message tests
+    // ==========================================================================
+
+    #[test]
+    fn parse_pitch_bend() {
+        // Pitch bend: 0xE0-0xEF, LSB, MSB
+        // Center is 0x2000 (8192), stored as LSB=0x00, MSB=0x40
+        let bytes = [0xE3, 0x00, 0x40]; // Ch 3, center position
+        let activity = parse_midi_message(1000, "Port", &bytes).unwrap();
+
+        assert_eq!(activity.channel, Some(3));
+        assert!(matches!(
+            activity.kind,
+            MessageKind::PitchBend { value: 8192 }
+        ));
+    }
+
+    #[test]
+    fn parse_pitch_bend_max() {
+        // Max pitch bend: LSB=0x7F, MSB=0x7F = 16383
+        let bytes = [0xE0, 0x7F, 0x7F];
+        let activity = parse_midi_message(1000, "Port", &bytes).unwrap();
+
+        assert!(matches!(
+            activity.kind,
+            MessageKind::PitchBend { value: 16383 }
+        ));
+    }
+
+    #[test]
+    fn parse_aftertouch() {
+        // Channel pressure (aftertouch): 0xD0-0xDF, value
+        let bytes = [0xD5, 100]; // Ch 5, pressure 100
+        let activity = parse_midi_message(1000, "Port", &bytes).unwrap();
+
+        assert_eq!(activity.channel, Some(5));
+        assert!(matches!(
+            activity.kind,
+            MessageKind::Aftertouch { value: 100 }
+        ));
+    }
+
+    #[test]
+    fn parse_poly_aftertouch() {
+        // Polyphonic key pressure: 0xA0-0xAF, note, value
+        let bytes = [0xA2, 64, 80]; // Ch 2, note 64, pressure 80
+        let activity = parse_midi_message(1000, "Port", &bytes).unwrap();
+
+        assert_eq!(activity.channel, Some(2));
+        assert!(matches!(
+            activity.kind,
+            MessageKind::PolyAftertouch { note: 64, value: 80 }
+        ));
+    }
+
+    #[test]
+    fn parse_sysex() {
+        // SysEx: starts with 0xF0, ends with 0xF7
+        let bytes = [0xF0, 0x7E, 0x00, 0x06, 0x01, 0xF7];
+        let activity = parse_midi_message(1000, "Port", &bytes).unwrap();
+
+        assert_eq!(activity.channel, None); // System message, no channel
+        assert!(matches!(activity.kind, MessageKind::SysEx));
+    }
+
+    #[test]
+    fn parse_transport_start() {
+        let bytes = [0xFA];
+        let activity = parse_midi_message(1000, "Port", &bytes).unwrap();
+
+        assert_eq!(activity.channel, None);
+        assert!(matches!(activity.kind, MessageKind::Start));
+    }
+
+    #[test]
+    fn parse_transport_stop() {
+        let bytes = [0xFC];
+        let activity = parse_midi_message(1000, "Port", &bytes).unwrap();
+
+        assert_eq!(activity.channel, None);
+        assert!(matches!(activity.kind, MessageKind::Stop));
+    }
+
+    #[test]
+    fn parse_transport_continue() {
+        let bytes = [0xFB];
+        let activity = parse_midi_message(1000, "Port", &bytes).unwrap();
+
+        assert_eq!(activity.channel, None);
+        assert!(matches!(activity.kind, MessageKind::Continue));
+    }
+
+    #[test]
+    fn parse_transport_clock() {
+        let bytes = [0xF8];
+        let activity = parse_midi_message(1000, "Port", &bytes).unwrap();
+
+        assert_eq!(activity.channel, None);
+        assert!(matches!(activity.kind, MessageKind::Clock));
+    }
+
+    // ==========================================================================
+    // Additional should_route tests
+    // ==========================================================================
+
+    #[test]
+    fn should_route_except_blocks_listed() {
+        let filter = ChannelFilter::Except(vec![9, 10]); // Block channels 9, 10
+        assert!(should_route(&[0x90, 60, 100], &filter)); // Ch 0 - pass
+        assert!(should_route(&[0x98, 60, 100], &filter)); // Ch 8 - pass
+        assert!(!should_route(&[0x99, 60, 100], &filter)); // Ch 9 - block
+        assert!(!should_route(&[0x9A, 60, 100], &filter)); // Ch 10 - block
+        assert!(should_route(&[0x9B, 60, 100], &filter)); // Ch 11 - pass
+    }
+
+    #[test]
+    fn should_route_empty_bytes_passes() {
+        let filter = ChannelFilter::Only(vec![0]);
+        // Empty messages have no channel, so they should pass (treated as system)
+        assert!(should_route(&[], &filter));
+    }
+
+    // ==========================================================================
+    // Additional apply_cc_mappings edge case tests
+    // ==========================================================================
+
+    #[test]
+    fn apply_cc_mappings_preserves_value() {
+        // Ensure the CC value is preserved through mapping
+        let mapping = CcMapping {
+            source_cc: 1,
+            targets: vec![CcTarget {
+                cc: 74,
+                channels: vec![1],
+            }],
+        };
+        let route = make_test_route(true, vec![mapping]);
+
+        // Test various values
+        for value in [0, 1, 64, 126, 127] {
+            let cc = [0xB0, 1, value];
+            let result = apply_cc_mappings(&cc, &route);
+            assert_eq!(result[0][2], value, "Value {} should be preserved", value);
+        }
+    }
+
+    #[test]
+    fn apply_cc_mappings_channel_zero_edge_case() {
+        // Channel 0 in 1-indexed (UI) is actually channel 0 in MIDI
+        // But if user specifies channel 0, it should become channel -1 which is 0 after clamping
+        let mapping = CcMapping {
+            source_cc: 1,
+            targets: vec![CcTarget {
+                cc: 74,
+                channels: vec![0], // Edge case: 0 in 1-indexed
+            }],
+        };
+        let route = make_test_route(true, vec![mapping]);
+        let cc = [0xB5, 1, 64];
+        let result = apply_cc_mappings(&cc, &route);
+        // Channel 0 - 1 = -1, but since it's u8 and we check > 0, it becomes 0
+        assert_eq!(result[0][0], 0xB0); // Should be channel 0
+    }
+
+    #[test]
+    fn apply_cc_mappings_multiple_mappings_same_source() {
+        // Two different mappings for the same source CC
+        let mappings = vec![
+            CcMapping {
+                source_cc: 1,
+                targets: vec![CcTarget {
+                    cc: 74,
+                    channels: vec![1],
+                }],
+            },
+            CcMapping {
+                source_cc: 1, // Same source
+                targets: vec![CcTarget {
+                    cc: 71,
+                    channels: vec![2],
+                }],
+            },
+        ];
+        let route = make_test_route(true, mappings);
+        let cc = [0xB0, 1, 100];
+        let result = apply_cc_mappings(&cc, &route);
+
+        // Should only match the first mapping (find returns first match)
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0], vec![0xB0, 74, 100]);
+    }
 }

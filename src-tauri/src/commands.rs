@@ -2,7 +2,7 @@
 
 use crate::config::preset;
 use crate::midi::engine::{EngineEvent, MidiEngine};
-use crate::types::{CcMapping, ChannelFilter, ClockState, MidiActivity, MidiPort, PortId, Preset, Route};
+use crate::types::{Bpm, CcMapping, ChannelFilter, ClockState, EngineError, MidiActivity, MidiPort, PortId, Preset, Route};
 use std::sync::Mutex;
 use tauri::{ipc::Channel, State};
 use uuid::Uuid;
@@ -154,6 +154,30 @@ pub fn start_midi_monitor(
 }
 
 #[tauri::command]
+pub fn start_error_monitor(
+    state: State<AppState>,
+    on_error: Channel<EngineError>,
+) -> Result<(), String> {
+    let event_rx = state.engine.event_receiver();
+
+    std::thread::spawn(move || {
+        loop {
+            match event_rx.recv() {
+                Ok(EngineEvent::Error(error)) => {
+                    if on_error.send(error).is_err() {
+                        break;
+                    }
+                }
+                Ok(_) => {}
+                Err(_) => break,
+            }
+        }
+    });
+
+    Ok(())
+}
+
+#[tauri::command]
 pub fn list_presets() -> Vec<Preset> {
     preset::list_presets()
 }
@@ -199,12 +223,15 @@ pub fn get_active_preset_id() -> Option<String> {
 
 #[tauri::command]
 pub fn set_bpm(state: State<AppState>, bpm: f64) -> Result<(), String> {
-    let bpm = bpm.clamp(20.0, 300.0);
-    *state.clock_bpm.lock().unwrap() = bpm;
-    state.engine.set_bpm(bpm)?;
+    // Validate BPM using the newtype
+    let validated_bpm = Bpm::new(bpm).map_err(|e| e.to_string())?;
+    let bpm_value = validated_bpm.value();
+
+    *state.clock_bpm.lock().unwrap() = bpm_value;
+    state.engine.set_bpm(bpm_value)?;
 
     // Persist to config
-    crate::config::preset::set_clock_bpm(bpm)?;
+    crate::config::preset::set_clock_bpm(bpm_value)?;
 
     Ok(())
 }
