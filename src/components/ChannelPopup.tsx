@@ -1,23 +1,29 @@
-import { useState, useEffect, useRef, useLayoutEffect } from "react";
+import { useState, useEffect } from "react";
 import { Route, ChannelFilter, CcMapping } from "../types";
 import { removeRoute } from "../hooks/useMidi";
 import { useAppStore } from "../stores/appStore";
 import { CcMappingsEditor } from "./CcMappingsEditor";
-import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Toggle } from "@/components/ui/toggle";
+import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { ArrowRight, X, Trash2, Check } from "lucide-react";
+import { ArrowRight, Trash2, Check } from "lucide-react";
 
 interface Props {
   route: Route;
-  x: number;
-  y: number;
   onClose: () => void;
 }
 
-export function ChannelPopup({ route, x, y, onClose }: Props) {
+export function ChannelPopup({ route, onClose }: Props) {
   const { updateRouteChannels, updateRouteCcMappings } = useAppStore();
   const [activeTab, setActiveTab] = useState<"channels" | "cc">("channels");
   const [selectedChannels, setSelectedChannels] = useState<Set<number>>(
@@ -26,8 +32,6 @@ export function ChannelPopup({ route, x, y, onClose }: Props) {
   const [filterMode, setFilterMode] = useState<"all" | "only" | "except">(
     "all"
   );
-  const [position, setPosition] = useState({ left: x, top: y });
-  const popupRef = useRef<HTMLDivElement>(null);
 
   // CC mappings state
   const [ccPassthrough, setCcPassthrough] = useState(
@@ -38,7 +42,6 @@ export function ChannelPopup({ route, x, y, onClose }: Props) {
   );
 
   useEffect(() => {
-    // Initialize channel filter from route
     const channels = route.channels;
     if (channels === "All") {
       setFilterMode("all");
@@ -51,7 +54,6 @@ export function ChannelPopup({ route, x, y, onClose }: Props) {
       setSelectedChannels(new Set(channels.Except));
     }
 
-    // Initialize CC mappings from route
     setCcPassthrough(route.cc_passthrough ?? true);
     setCcMappings(route.cc_mappings ?? []);
   }, [route]);
@@ -69,7 +71,6 @@ export function ChannelPopup({ route, x, y, onClose }: Props) {
   };
 
   const handleApply = async () => {
-    // Save channel filter
     let filter: ChannelFilter;
     if (filterMode === "all") {
       filter = "All";
@@ -79,10 +80,7 @@ export function ChannelPopup({ route, x, y, onClose }: Props) {
       filter = { Except: Array.from(selectedChannels).sort((a, b) => a - b) };
     }
     await updateRouteChannels(route.id, filter);
-
-    // Save CC mappings
     await updateRouteCcMappings(route.id, ccPassthrough, ccMappings);
-
     onClose();
   };
 
@@ -99,179 +97,147 @@ export function ChannelPopup({ route, x, y, onClose }: Props) {
     onClose();
   };
 
-  // Adjust position to keep popup within viewport
-  useLayoutEffect(() => {
-    if (!popupRef.current) return;
-
-    const popup = popupRef.current;
-    const rect = popup.getBoundingClientRect();
-    const padding = 8; // Minimum distance from edge
-
-    let newLeft = x;
-    let newTop = y;
-
-    // Check right edge
-    if (x + rect.width > window.innerWidth - padding) {
-      newLeft = window.innerWidth - rect.width - padding;
-    }
-
-    // Check bottom edge
-    if (y + rect.height > window.innerHeight - padding) {
-      newTop = window.innerHeight - rect.height - padding;
-    }
-
-    // Check left edge
-    if (newLeft < padding) {
-      newLeft = padding;
-    }
-
-    // Check top edge
-    if (newTop < padding) {
-      newTop = padding;
-    }
-
-    setPosition({ left: newLeft, top: newTop });
-  }, [x, y, activeTab]); // Re-run when tab changes since size may differ
-
-  // Close on click outside
-  useEffect(() => {
-    const handleClick = (e: MouseEvent) => {
-      if (popupRef.current && !popupRef.current.contains(e.target as Node)) {
-        onClose();
-      }
-    };
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [onClose]);
-
   return (
-    <div
-      ref={popupRef}
-      className="fixed z-50 w-[340px] rounded-lg border bg-popover shadow-lg animate-in fade-in-0 zoom-in-95"
-      style={{ left: position.left, top: position.top }}
-    >
-      {/* Header: source -> dest port names + close */}
-      <div className="flex items-center justify-between gap-2 px-3 py-2">
-        <div className="flex items-center gap-1.5 min-w-0">
-          <span className="font-mono text-sm text-green-400 truncate">
-            {route.source.display_name}
-          </span>
-          <ArrowRight className="size-4 shrink-0 text-muted-foreground" />
-          <span className="font-mono text-sm text-blue-400 truncate">
-            {route.destination.display_name}
-          </span>
-        </div>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          onClick={onClose}
-          className="shrink-0"
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="sm:max-w-[560px] gap-0 p-0 overflow-hidden" showCloseButton>
+        {/* Header — signal flow */}
+        <DialogHeader className="px-5 pt-5 pb-4">
+          <DialogTitle className="flex items-center gap-3 text-sm">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="size-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.5)]" />
+              <span className="font-mono text-emerald-400 tracking-tight">
+                {route.source.display_name}
+              </span>
+            </span>
+            <ArrowRight className="size-3.5 text-white/20" />
+            <span className="inline-flex items-center gap-1.5">
+              <span className="size-1.5 rounded-full bg-sky-400 shadow-[0_0_6px_rgba(56,189,248,0.5)]" />
+              <span className="font-mono text-sky-400 tracking-tight">
+                {route.destination.display_name}
+              </span>
+            </span>
+          </DialogTitle>
+          <DialogDescription className="sr-only">
+            Configure route settings
+          </DialogDescription>
+        </DialogHeader>
+
+        {/* Tabs */}
+        <Tabs
+          value={activeTab}
+          onValueChange={(v) => setActiveTab(v as "channels" | "cc")}
         >
-          <X className="size-3.5" />
-        </Button>
-      </div>
-
-      {/* Tabs */}
-      <Tabs
-        value={activeTab}
-        onValueChange={(v) => setActiveTab(v as "channels" | "cc")}
-      >
-        <TabsList className="w-full rounded-none border-b bg-transparent h-9">
-          <TabsTrigger value="channels">Channels</TabsTrigger>
-          <TabsTrigger value="cc">CC Map</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="channels" className="p-3">
-          <div className="space-y-3">
-            {/* Filter mode toggle group */}
-            <ToggleGroup
-              type="single"
-              value={filterMode}
-              onValueChange={(value) => {
-                if (value) setFilterMode(value as "all" | "only" | "except");
-              }}
-              variant="outline"
-              size="sm"
-              className="w-full"
-            >
-              <ToggleGroupItem value="all" className="flex-1">
-                All
-              </ToggleGroupItem>
-              <ToggleGroupItem value="only" className="flex-1">
-                Only
-              </ToggleGroupItem>
-              <ToggleGroupItem value="except" className="flex-1">
-                Except
-              </ToggleGroupItem>
-            </ToggleGroup>
-
-            {/* Channel grid */}
-            {filterMode !== "all" && (
-              <div className="space-y-2">
-                <div className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
-                  MIDI Channels
-                </div>
-                <div className="grid grid-cols-8 gap-1">
-                  {Array.from({ length: 16 }, (_, i) => i + 1).map((ch) => (
-                    <Toggle
-                      key={ch}
-                      size="sm"
-                      pressed={selectedChannels.has(ch)}
-                      onPressedChange={() => toggleChannel(ch)}
-                      className="h-7 w-full text-xs font-mono data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
-                    >
-                      {ch}
-                    </Toggle>
-                  ))}
-                </div>
-                <div className="flex gap-1">
-                  <Button
-                    variant="outline"
-                    size="xs"
-                    onClick={() =>
-                      setSelectedChannels(
-                        new Set(Array.from({ length: 16 }, (_, i) => i + 1))
-                      )
-                    }
-                  >
-                    All
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="xs"
-                    onClick={() => setSelectedChannels(new Set())}
-                  >
-                    None
-                  </Button>
-                </div>
-              </div>
-            )}
+          <div className="px-5">
+            <TabsList className="w-full">
+              <TabsTrigger value="channels" className="flex-1 text-xs">Channels</TabsTrigger>
+              <TabsTrigger value="cc" className="flex-1 text-xs">CC Map</TabsTrigger>
+            </TabsList>
           </div>
-        </TabsContent>
 
-        <TabsContent value="cc" className="p-3">
-          <CcMappingsEditor
-            ccPassthrough={ccPassthrough}
-            ccMappings={ccMappings}
-            sourcePort={route.source.name}
-            destinationPort={route.destination.name}
-            onChange={handleCcMappingsChange}
-          />
-        </TabsContent>
-      </Tabs>
+          <TabsContent value="channels" className="px-5 py-4">
+            <div className="space-y-4">
+              {/* Filter mode */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest">
+                  Filter Mode
+                </label>
+                <ToggleGroup
+                  type="single"
+                  value={filterMode}
+                  onValueChange={(value) => {
+                    if (value) setFilterMode(value as "all" | "only" | "except");
+                  }}
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                >
+                  <ToggleGroupItem value="all" className="flex-1 text-xs">All</ToggleGroupItem>
+                  <ToggleGroupItem value="only" className="flex-1 text-xs">Only</ToggleGroupItem>
+                  <ToggleGroupItem value="except" className="flex-1 text-xs">Except</ToggleGroupItem>
+                </ToggleGroup>
+              </div>
 
-      {/* Actions footer */}
-      <Separator />
-      <div className="flex items-center justify-between px-3 py-2">
-        <Button variant="destructive" size="sm" onClick={handleDelete}>
-          <Trash2 />
-          Delete
-        </Button>
-        <Button size="sm" onClick={handleApply}>
-          <Check />
-          Apply
-        </Button>
-      </div>
-    </div>
+              {/* Channel grid */}
+              {filterMode !== "all" && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest">
+                      MIDI Channels
+                    </label>
+                    <div className="flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="xs"
+                        className="text-[10px]"
+                        onClick={() =>
+                          setSelectedChannels(
+                            new Set(Array.from({ length: 16 }, (_, i) => i + 1))
+                          )
+                        }
+                      >
+                        All
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="xs"
+                        className="text-[10px]"
+                        onClick={() => setSelectedChannels(new Set())}
+                      >
+                        None
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-8 gap-1">
+                    {Array.from({ length: 16 }, (_, i) => i + 1).map((ch) => (
+                      <Toggle
+                        key={ch}
+                        size="sm"
+                        pressed={selectedChannels.has(ch)}
+                        onPressedChange={() => toggleChannel(ch)}
+                        className="h-8 w-full text-xs font-mono data-[state=on]:bg-emerald-500/20 data-[state=on]:text-emerald-400 data-[state=on]:border-emerald-500/30 data-[state=on]:shadow-[inset_0_1px_0_rgba(52,211,153,0.1)]"
+                      >
+                        {ch}
+                      </Toggle>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="cc" className="px-5 py-4">
+            <CcMappingsEditor
+              ccPassthrough={ccPassthrough}
+              ccMappings={ccMappings}
+              sourcePort={route.source.name}
+              destinationPort={route.destination.name}
+              onChange={handleCcMappingsChange}
+            />
+          </TabsContent>
+        </Tabs>
+
+        {/* Footer */}
+        <Separator />
+        <DialogFooter className="flex-row items-center justify-between px-5 py-3">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+            onClick={handleDelete}
+          >
+            <Trash2 className="size-3.5" />
+            Delete
+          </Button>
+          <Button
+            size="sm"
+            className="bg-emerald-600 hover:bg-emerald-500 text-white shadow-[0_0_12px_rgba(16,185,129,0.15)]"
+            onClick={handleApply}
+          >
+            <Check className="size-3.5" />
+            Apply
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
