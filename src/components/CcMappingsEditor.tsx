@@ -6,6 +6,7 @@ import {
 } from "../data/deviceCcMaps";
 import { startMidiMonitor } from "../hooks/useMidi";
 import { ChannelSelector } from "./ui";
+import "./CcMappingsEditor.css";
 
 interface Props {
   ccPassthrough: boolean;
@@ -209,103 +210,134 @@ export function CcMappingsEditor({
     );
   };
 
-  // Render source CC input with learn button
-  const renderSourceCcInput = (row: FlatRow, index: number) => {
-    const isLearning = learningRowIndex === index;
+  return (
+    <div className="cc-editor">
+      {/* Header with passthrough toggle */}
+      <div className="cc-editor-header">
+        <label className="passthrough-toggle">
+          <input
+            type="checkbox"
+            checked={passthrough}
+            onChange={(e) => handlePassthroughChange(e.target.checked)}
+          />
+          <span className="toggle-track">
+            <span className="toggle-thumb" />
+          </span>
+          <span className="toggle-label">Pass unmapped</span>
+        </label>
 
-    return (
-      <div className="source-cc-input">
-        <input
-          type="number"
-          min="0"
-          max="127"
-          value={row.sourceCC}
-          onChange={(e) => updateRow(index, "sourceCC", e.target.value)}
-          disabled={isLearning}
-          className={isLearning ? "learning" : ""}
-        />
-        {isLearning ? (
-          <button
-            className="learn-btn learning"
-            onClick={cancelLearning}
-            title="Cancel learning"
-          >
-            ...
-          </button>
-        ) : (
-          <button
-            className="learn-btn"
-            onClick={() => startLearning(index)}
-            title="Learn: move a knob on your controller"
-          >
-            Learn
-          </button>
+        {deviceMap && (
+          <div className="device-badge">
+            <svg width="12" height="12" viewBox="0 0 12 12">
+              <circle cx="6" cy="6" r="3" fill="currentColor"/>
+            </svg>
+            {deviceMap.name}
+          </div>
         )}
       </div>
-    );
-  };
 
-  return (
-    <div className="cc-mappings-editor">
-      <label className="passthrough-checkbox">
-        <input
-          type="checkbox"
-          checked={passthrough}
-          onChange={(e) => handlePassthroughChange(e.target.checked)}
-        />
-        Pass through unmapped CCs
-      </label>
-
-      {deviceMap && (
-        <div className="device-detected">
-          Device: {deviceMap.name}
-        </div>
-      )}
-
+      {/* Learning indicator */}
       {learningRowIndex !== null && (
-        <div className="learn-prompt">
-          Move a knob or fader on your controller...
+        <div className="learn-banner">
+          <div className="learn-pulse" />
+          <span>Move a knob or fader...</span>
+          <button onClick={cancelLearning}>Cancel</button>
         </div>
       )}
 
-      {rows.length > 0 && (
-        <table className="cc-mappings-table">
-          <thead>
-            <tr>
-              <th>Source CC</th>
-              <th>Target Parameter</th>
-              <th>Channels</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row, index) => (
-              <tr key={index} className={learningRowIndex === index ? "learning-row" : ""}>
-                <td>{renderSourceCcInput(row, index)}</td>
-                <td>{renderTargetCcSelector(row, index)}</td>
-                <td>
-                  <ChannelSelector
-                    channels={row.channels}
-                    onChange={(channels) => updateRow(index, "channels", channels)}
+      {/* Mappings list */}
+      <div className="mappings-list">
+        {rows.length === 0 ? (
+          <div className="empty-mappings">
+            <svg width="32" height="32" viewBox="0 0 32 32" className="empty-icon">
+              <circle cx="8" cy="8" r="4" stroke="currentColor" strokeWidth="1.5" fill="none" opacity="0.3"/>
+              <circle cx="24" cy="24" r="4" stroke="currentColor" strokeWidth="1.5" fill="none" opacity="0.3"/>
+              <path d="M11 11 L21 21" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2 2" opacity="0.3"/>
+            </svg>
+            <p>No CC mappings</p>
+            <span>Map controller knobs to device parameters</span>
+          </div>
+        ) : (
+          rows.map((row, index) => (
+            <div
+              key={index}
+              className={`mapping-row ${learningRowIndex === index ? "learning" : ""}`}
+            >
+              {/* Source section */}
+              <div className="mapping-source">
+                <div className="section-label">FROM</div>
+                <div className="cc-input-group">
+                  <input
+                    type="number"
+                    min="0"
+                    max="127"
+                    value={row.sourceCC}
+                    onChange={(e) => updateRow(index, "sourceCC", e.target.value)}
+                    disabled={learningRowIndex === index}
+                    className="cc-number-input"
                   />
-                </td>
-                <td>
                   <button
-                    className="remove-row-btn"
-                    onClick={() => removeRow(index)}
-                    title="Remove mapping"
+                    className={`learn-btn ${learningRowIndex === index ? "active" : ""}`}
+                    onClick={() => learningRowIndex === index ? cancelLearning() : startLearning(index)}
                   >
-                    ×
+                    {learningRowIndex === index ? (
+                      <span className="learning-dots">...</span>
+                    ) : (
+                      <>
+                        <svg width="10" height="10" viewBox="0 0 10 10">
+                          <circle cx="5" cy="5" r="3" stroke="currentColor" strokeWidth="1.5" fill="none"/>
+                          <circle cx="5" cy="5" r="1" fill="currentColor"/>
+                        </svg>
+                        Learn
+                      </>
+                    )}
                   </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+                </div>
+              </div>
 
-      <button className="add-mapping-btn" onClick={addRow}>
-        + Add Mapping
+              {/* Arrow */}
+              <div className="mapping-arrow">
+                <svg width="24" height="12" viewBox="0 0 24 12">
+                  <path d="M0 6 H18 M14 2 L18 6 L14 10" stroke="currentColor" strokeWidth="1.5" fill="none"/>
+                </svg>
+              </div>
+
+              {/* Target section */}
+              <div className="mapping-target">
+                <div className="section-label">TO</div>
+                {renderTargetCcSelector(row, index)}
+              </div>
+
+              {/* Channel section */}
+              <div className="mapping-channels">
+                <div className="section-label">CH</div>
+                <ChannelSelector
+                  channels={row.channels}
+                  onChange={(channels) => updateRow(index, "channels", channels)}
+                />
+              </div>
+
+              {/* Delete button */}
+              <button
+                className="mapping-delete"
+                onClick={() => removeRow(index)}
+                title="Remove mapping"
+              >
+                <svg width="12" height="12" viewBox="0 0 12 12">
+                  <path d="M3 3 L9 9 M9 3 L3 9" stroke="currentColor" strokeWidth="1.5"/>
+                </svg>
+              </button>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Add mapping button */}
+      <button className="add-mapping" onClick={addRow}>
+        <svg width="12" height="12" viewBox="0 0 12 12">
+          <path d="M6 2 V10 M2 6 H10" stroke="currentColor" strokeWidth="1.5"/>
+        </svg>
+        Add Mapping
       </button>
     </div>
   );

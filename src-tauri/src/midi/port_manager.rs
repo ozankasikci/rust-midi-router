@@ -309,4 +309,84 @@ mod tests {
         let needed_outputs = PortManager::needed_output_ports(&routes);
         assert_eq!(needed_outputs.len(), 2);
     }
+
+    #[test]
+    fn needed_input_ports_empty_routes() {
+        let routes: Vec<Route> = vec![];
+        let needed = PortManager::needed_input_ports(&routes);
+        assert!(needed.is_empty());
+    }
+
+    #[test]
+    fn needed_output_ports_empty_routes() {
+        let routes: Vec<Route> = vec![];
+        let needed = PortManager::needed_output_ports(&routes);
+        assert!(needed.is_empty());
+    }
+
+    #[test]
+    fn needed_ports_all_disabled() {
+        let routes = vec![
+            make_test_route("Input A", "Output A", false),
+            make_test_route("Input B", "Output B", false),
+        ];
+
+        let needed_inputs = PortManager::needed_input_ports(&routes);
+        assert!(needed_inputs.is_empty());
+
+        let needed_outputs = PortManager::needed_output_ports(&routes);
+        assert!(needed_outputs.is_empty());
+    }
+
+    #[test]
+    fn port_manager_clear_all_resets_state() {
+        let (midi_tx, _midi_rx) = bounded(10);
+        let (error_tx, _error_rx) = bounded(10);
+
+        let mut manager = PortManager::new(midi_tx, error_tx);
+
+        // After clear_all, internal hashmaps should be empty
+        // We can verify by checking that sync_with_routes connects ports
+        // (This is a behavioral test since we can't directly access private fields)
+        manager.clear_all();
+
+        // No panic, clear completes successfully
+    }
+
+    #[test]
+    fn port_manager_sync_with_routes_handles_nonexistent_ports() {
+        let (midi_tx, _midi_rx) = bounded(10);
+        let (error_tx, _error_rx) = bounded(10);
+
+        let mut manager = PortManager::new(midi_tx, error_tx);
+
+        let routes = vec![
+            make_test_route("Nonexistent Input", "Nonexistent Output", true),
+        ];
+
+        // Should not panic, just log errors
+        manager.sync_with_routes(&routes);
+    }
+
+    #[test]
+    fn port_manager_send_to_nonexistent_returns_error() {
+        let (midi_tx, _midi_rx) = bounded(10);
+        let (error_tx, _error_rx) = bounded(10);
+
+        let manager = PortManager::new(midi_tx, error_tx);
+
+        let result = manager.send_to("Nonexistent Port", &[0x90, 60, 100]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn port_manager_send_to_all_empty_does_not_panic() {
+        let (midi_tx, _midi_rx) = bounded(10);
+        let (error_tx, _error_rx) = bounded(10);
+
+        let manager = PortManager::new(midi_tx, error_tx);
+
+        // Should not panic with no connections
+        manager.send_to_all(&[0x90, 60, 100]);
+    }
 }

@@ -18,9 +18,8 @@ pub fn get_ports(state: State<AppState>) -> Result<(Vec<MidiPort>, Vec<MidiPort>
     use crate::midi::ports::{list_input_ports, list_output_ports};
 
     // Trigger engine to close connections so CoreMIDI refreshes port list
-    state.engine.refresh_ports()?;
-    // Small delay to let the engine process the refresh
-    std::thread::sleep(std::time::Duration::from_millis(150));
+    // Use sync version to ensure refresh is complete before listing ports
+    state.engine.refresh_ports_sync()?;
 
     let inputs = list_input_ports();
     let outputs = list_output_ports();

@@ -2994,6 +2994,7 @@ name = "rust-midi-router"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "coremidi",
  "crossbeam-channel",
  "dirs 5.0.1",
  "midir",

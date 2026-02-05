@@ -11,7 +11,10 @@ use std::time::Duration;
 
 #[derive(Debug)]
 pub enum EngineCommand {
-    RefreshPorts,
+    RefreshPorts {
+        /// Optional one-shot channel to signal when refresh is complete
+        done_tx: Option<crossbeam_channel::Sender<()>>,
+    },
     SetRoutes(Vec<Route>),
     SetBpm(f64),
     SendStart,
@@ -66,8 +69,22 @@ impl MidiEngine {
         self.event_rx.clone()
     }
 
+    /// Refresh ports asynchronously (non-blocking)
     pub fn refresh_ports(&self) -> Result<(), String> {
-        self.send_command(EngineCommand::RefreshPorts)
+        self.send_command(EngineCommand::RefreshPorts { done_tx: None })
+    }
+
+    /// Refresh ports and block until the engine has completed the refresh
+    pub fn refresh_ports_sync(&self) -> Result<(), String> {
+        let (done_tx, done_rx) = crossbeam_channel::bounded(1);
+        self.send_command(EngineCommand::RefreshPorts {
+            done_tx: Some(done_tx),
+        })?;
+        // Wait for engine to signal completion (with timeout to avoid deadlock)
+        // Allow up to 5 seconds for CoreMIDI to rescan on macOS
+        done_rx
+            .recv_timeout(Duration::from_secs(5))
+            .map_err(|_| "Timeout waiting for port refresh".to_string())
     }
 
     pub fn set_routes(&self, routes: Vec<Route>) -> Result<(), String> {
@@ -100,6 +117,7 @@ impl Drop for MidiEngine {
     }
 }
 
+/// Engine loop - runs in dedicated thread, processes commands and routes MIDI
 fn engine_loop(cmd_rx: Receiver<EngineCommand>, event_tx: Sender<EngineEvent>) {
     let routes: Arc<Mutex<Vec<Route>>> = Arc::new(Mutex::new(Vec::new()));
 
@@ -225,16 +243,30 @@ fn engine_loop(cmd_rx: Receiver<EngineCommand>, event_tx: Sender<EngineEvent>) {
 
         // Check for commands (with short timeout for clock accuracy)
         match cmd_rx.recv_timeout(Duration::from_millis(1)) {
-            Ok(EngineCommand::RefreshPorts) => {
-                // Close all connections to force CoreMIDI to refresh port list
+            Ok(EngineCommand::RefreshPorts { done_tx }) => {
+                // Close all connections first
                 port_manager.clear_all();
 
-                // Small delay to let CoreMIDI update
-                std::thread::sleep(Duration::from_millis(100));
+                // Force CoreMIDI to rescan all devices (macOS only)
+                #[cfg(target_os = "macos")]
+                {
+                    crate::midi::ports::force_coremidi_refresh();
+                }
+
+                #[cfg(not(target_os = "macos"))]
+                {
+                    // On other platforms, just wait a bit
+                    std::thread::sleep(Duration::from_millis(100));
+                }
 
                 let (inputs, outputs) = (list_input_ports(), list_output_ports());
                 eprintln!("[ENGINE] After refresh: {} inputs, {} outputs", inputs.len(), outputs.len());
                 let _ = event_tx.send(EngineEvent::PortsChanged { inputs, outputs });
+
+                // Signal completion if caller is waiting
+                if let Some(tx) = done_tx {
+                    let _ = tx.send(());
+                }
             }
             Ok(EngineCommand::SetRoutes(new_routes)) => {
                 // Update routes
@@ -282,5 +314,161 @@ fn engine_loop(cmd_rx: Receiver<EngineCommand>, event_tx: Sender<EngineEvent>) {
                 break;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Helper to wait for an event matching a predicate with timeout
+    fn wait_for_event<F>(event_rx: &Receiver<EngineEvent>, timeout_ms: u64, mut predicate: F) -> bool
+    where
+        F: FnMut(&EngineEvent) -> bool,
+    {
+        let deadline = std::time::Instant::now() + Duration::from_millis(timeout_ms);
+        while std::time::Instant::now() < deadline {
+            match event_rx.recv_timeout(Duration::from_millis(10)) {
+                Ok(event) if predicate(&event) => return true,
+                Ok(_) => continue, // Event didn't match, keep looking
+                Err(crossbeam_channel::RecvTimeoutError::Timeout) => continue,
+                Err(crossbeam_channel::RecvTimeoutError::Disconnected) => return false,
+            }
+        }
+        false
+    }
+
+    #[test]
+    fn engine_creates_and_shuts_down() {
+        let engine = MidiEngine::new();
+        // Engine should be running
+        assert!(engine.shutdown().is_ok());
+    }
+
+    #[test]
+    fn engine_set_bpm_sends_clock_state_event() {
+        let engine = MidiEngine::new();
+        let event_rx = engine.event_receiver();
+
+        // Wait for initial events to be sent, then set BPM
+        std::thread::sleep(Duration::from_millis(50));
+
+        // Set BPM (this will send a ClockStateChanged event)
+        engine.set_bpm(140.0).unwrap();
+
+        // Wait for ClockStateChanged event with correct BPM
+        // Note: we may see initial event first (120 BPM), so keep looking
+        let found = wait_for_event(&event_rx, 1000, |event| {
+            if let EngineEvent::ClockStateChanged(state) = event {
+                (state.bpm - 140.0).abs() < 0.001
+            } else {
+                false
+            }
+        });
+        assert!(found, "Should have received ClockStateChanged event with BPM 140");
+
+        engine.shutdown().unwrap();
+    }
+
+    #[test]
+    fn engine_refresh_ports_sync_completes() {
+        let engine = MidiEngine::new();
+
+        // refresh_ports_sync should complete without timeout
+        let result = engine.refresh_ports_sync();
+        assert!(result.is_ok(), "refresh_ports_sync should complete: {:?}", result);
+
+        engine.shutdown().unwrap();
+    }
+
+    #[test]
+    fn engine_refresh_ports_emits_ports_changed_event() {
+        let engine = MidiEngine::new();
+        let event_rx = engine.event_receiver();
+
+        // Drain initial events
+        std::thread::sleep(Duration::from_millis(100));
+        while event_rx.try_recv().is_ok() {}
+
+        // Trigger refresh (sync ensures completion)
+        engine.refresh_ports_sync().unwrap();
+
+        // Check for PortsChanged event
+        let found = wait_for_event(&event_rx, 500, |event| {
+            matches!(event, EngineEvent::PortsChanged { .. })
+        });
+        assert!(found, "Should have received PortsChanged event");
+
+        engine.shutdown().unwrap();
+    }
+
+    #[test]
+    fn engine_transport_start_changes_clock_state() {
+        let engine = MidiEngine::new();
+        let event_rx = engine.event_receiver();
+
+        // Wait for engine to initialize
+        std::thread::sleep(Duration::from_millis(50));
+
+        // Send start
+        engine.send_start().unwrap();
+
+        // Wait for ClockStateChanged with running=true
+        let found = wait_for_event(&event_rx, 1000, |event| {
+            if let EngineEvent::ClockStateChanged(state) = event {
+                state.running
+            } else {
+                false
+            }
+        });
+        assert!(found, "Clock should be running after start");
+
+        engine.shutdown().unwrap();
+    }
+
+    #[test]
+    fn engine_transport_stop_changes_clock_state() {
+        let engine = MidiEngine::new();
+        let event_rx = engine.event_receiver();
+
+        // Start first and wait for it to process
+        engine.send_start().unwrap();
+        let _ = wait_for_event(&event_rx, 500, |event| {
+            matches!(event, EngineEvent::ClockStateChanged(state) if state.running)
+        });
+
+        // Send stop
+        engine.send_stop().unwrap();
+
+        // Wait for ClockStateChanged with running=false
+        let found = wait_for_event(&event_rx, 500, |event| {
+            matches!(event, EngineEvent::ClockStateChanged(state) if !state.running)
+        });
+        assert!(found, "Clock should be stopped after stop");
+
+        engine.shutdown().unwrap();
+    }
+
+    #[test]
+    fn engine_set_routes_does_not_panic() {
+        use crate::types::{ChannelFilter, PortId, Route};
+
+        let engine = MidiEngine::new();
+
+        let routes = vec![Route {
+            id: uuid::Uuid::new_v4(),
+            source: PortId::new("Nonexistent Input".to_string()),
+            destination: PortId::new("Nonexistent Output".to_string()),
+            enabled: true,
+            channels: ChannelFilter::All,
+            cc_passthrough: true,
+            cc_mappings: vec![],
+        }];
+
+        // Should not panic even with nonexistent ports
+        let result = engine.set_routes(routes);
+        assert!(result.is_ok());
+
+        engine.shutdown().unwrap();
     }
 }

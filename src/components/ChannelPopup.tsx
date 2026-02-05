@@ -3,6 +3,7 @@ import { Route, ChannelFilter, CcMapping } from "../types";
 import { removeRoute } from "../hooks/useMidi";
 import { useAppStore } from "../stores/appStore";
 import { CcMappingsEditor } from "./CcMappingsEditor";
+import "./ChannelPopup.css";
 
 interface Props {
   route: Route;
@@ -19,11 +20,17 @@ export function ChannelPopup({ route, x, y, onClose }: Props) {
   );
   const [filterMode, setFilterMode] = useState<"all" | "only" | "except">("all");
   const [position, setPosition] = useState({ left: x, top: y });
+  const [isVisible, setIsVisible] = useState(false);
   const popupRef = useRef<HTMLDivElement>(null);
 
   // CC mappings state
   const [ccPassthrough, setCcPassthrough] = useState(route.cc_passthrough ?? true);
   const [ccMappings, setCcMappings] = useState<CcMapping[]>(route.cc_mappings ?? []);
+
+  // Animate in on mount
+  useEffect(() => {
+    requestAnimationFrame(() => setIsVisible(true));
+  }, []);
 
   useEffect(() => {
     // Initialize channel filter from route
@@ -133,12 +140,31 @@ export function ChannelPopup({ route, x, y, onClose }: Props) {
   return (
     <div
       ref={popupRef}
-      className="channel-popup"
+      className={`route-popup ${isVisible ? 'visible' : ''}`}
       style={{ left: position.left, top: position.top, position: "fixed" }}
     >
+      {/* Rack-style header with notches */}
+      <div className="popup-rack-header">
+        <div className="rack-notch" />
+        <div className="rack-notch" />
+        <div className="rack-notch" />
+      </div>
+
       <div className="popup-header">
-        <span>{route.source.display_name} → {route.destination.display_name}</span>
-        <button onClick={onClose}>×</button>
+        <div className="route-path">
+          <span className="port-name source">{route.source.display_name}</span>
+          <span className="route-arrow">
+            <svg width="20" height="10" viewBox="0 0 20 10">
+              <path d="M0 5 L14 5 M10 1 L14 5 L10 9" stroke="currentColor" strokeWidth="1.5" fill="none"/>
+            </svg>
+          </span>
+          <span className="port-name dest">{route.destination.display_name}</span>
+        </div>
+        <button className="close-btn" onClick={onClose}>
+          <svg width="12" height="12" viewBox="0 0 12 12">
+            <path d="M2 2 L10 10 M10 2 L2 10" stroke="currentColor" strokeWidth="1.5"/>
+          </svg>
+        </button>
       </div>
 
       <div className="popup-tabs">
@@ -146,77 +172,109 @@ export function ChannelPopup({ route, x, y, onClose }: Props) {
           className={activeTab === "channels" ? "active" : ""}
           onClick={() => setActiveTab("channels")}
         >
+          <svg width="14" height="14" viewBox="0 0 14 14" className="tab-icon">
+            <rect x="1" y="1" width="4" height="4" rx="1" fill="currentColor" opacity="0.8"/>
+            <rect x="9" y="1" width="4" height="4" rx="1" fill="currentColor" opacity="0.4"/>
+            <rect x="1" y="9" width="4" height="4" rx="1" fill="currentColor" opacity="0.4"/>
+            <rect x="9" y="9" width="4" height="4" rx="1" fill="currentColor" opacity="0.8"/>
+          </svg>
           Channels
         </button>
         <button
           className={activeTab === "cc" ? "active" : ""}
           onClick={() => setActiveTab("cc")}
         >
-          CC Mappings
+          <svg width="14" height="14" viewBox="0 0 14 14" className="tab-icon">
+            <circle cx="4" cy="4" r="2.5" stroke="currentColor" strokeWidth="1.2" fill="none"/>
+            <circle cx="10" cy="10" r="2.5" stroke="currentColor" strokeWidth="1.2" fill="none"/>
+            <path d="M5.5 5.5 L8.5 8.5" stroke="currentColor" strokeWidth="1.2"/>
+          </svg>
+          CC Map
         </button>
       </div>
 
-      {activeTab === "channels" && (
-        <>
-          <div className="filter-mode">
-            <label>
-              <input
-                type="radio"
-                checked={filterMode === "all"}
-                onChange={() => setFilterMode("all")}
-              />
-              All channels
-            </label>
-            <label>
-              <input
-                type="radio"
-                checked={filterMode === "only"}
-                onChange={() => setFilterMode("only")}
-              />
-              Only selected
-            </label>
-            <label>
-              <input
-                type="radio"
-                checked={filterMode === "except"}
-                onChange={() => setFilterMode("except")}
-              />
-              All except selected
-            </label>
-          </div>
-
-          {filterMode !== "all" && (
-            <div className="channel-grid">
-              {Array.from({ length: 16 }, (_, i) => i + 1).map((ch) => (
-                <label key={ch} className="channel-checkbox">
-                  <input
-                    type="checkbox"
-                    checked={selectedChannels.has(ch)}
-                    onChange={() => toggleChannel(ch)}
-                  />
-                  {ch}
-                </label>
-              ))}
+      <div className="popup-content">
+        {activeTab === "channels" && (
+          <div className="channels-tab">
+            <div className="filter-mode">
+              <label className={`filter-option ${filterMode === "all" ? "selected" : ""}`}>
+                <input
+                  type="radio"
+                  checked={filterMode === "all"}
+                  onChange={() => setFilterMode("all")}
+                />
+                <span className="filter-radio" />
+                <span className="filter-label">All channels</span>
+              </label>
+              <label className={`filter-option ${filterMode === "only" ? "selected" : ""}`}>
+                <input
+                  type="radio"
+                  checked={filterMode === "only"}
+                  onChange={() => setFilterMode("only")}
+                />
+                <span className="filter-radio" />
+                <span className="filter-label">Only selected</span>
+              </label>
+              <label className={`filter-option ${filterMode === "except" ? "selected" : ""}`}>
+                <input
+                  type="radio"
+                  checked={filterMode === "except"}
+                  onChange={() => setFilterMode("except")}
+                />
+                <span className="filter-radio" />
+                <span className="filter-label">All except</span>
+              </label>
             </div>
-          )}
-        </>
-      )}
 
-      {activeTab === "cc" && (
-        <CcMappingsEditor
-          ccPassthrough={ccPassthrough}
-          ccMappings={ccMappings}
-          sourcePort={route.source.name}
-          destinationPort={route.destination.name}
-          onChange={handleCcMappingsChange}
-        />
-      )}
+            {filterMode !== "all" && (
+              <div className="led-matrix">
+                <div className="matrix-label">MIDI Channels</div>
+                <div className="led-grid">
+                  {Array.from({ length: 16 }, (_, i) => i + 1).map((ch) => (
+                    <button
+                      key={ch}
+                      className={`led-btn ${selectedChannels.has(ch) ? "active" : ""}`}
+                      onClick={() => toggleChannel(ch)}
+                    >
+                      {ch}
+                    </button>
+                  ))}
+                </div>
+                <div className="matrix-quick-actions">
+                  <button onClick={() => setSelectedChannels(new Set(Array.from({ length: 16 }, (_, i) => i + 1)))}>
+                    All
+                  </button>
+                  <button onClick={() => setSelectedChannels(new Set())}>
+                    None
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === "cc" && (
+          <CcMappingsEditor
+            ccPassthrough={ccPassthrough}
+            ccMappings={ccMappings}
+            sourcePort={route.source.name}
+            destinationPort={route.destination.name}
+            onChange={handleCcMappingsChange}
+          />
+        )}
+      </div>
 
       <div className="popup-actions">
-        <button onClick={handleDelete} className="delete-btn">
-          Delete Route
+        <button onClick={handleDelete} className="action-btn danger">
+          <svg width="12" height="12" viewBox="0 0 12 12">
+            <path d="M3 3 L9 9 M9 3 L3 9" stroke="currentColor" strokeWidth="1.5"/>
+          </svg>
+          Delete
         </button>
-        <button onClick={handleApply} className="apply-btn">
+        <button onClick={handleApply} className="action-btn primary">
+          <svg width="12" height="12" viewBox="0 0 12 12">
+            <path d="M2 6 L5 9 L10 3" stroke="currentColor" strokeWidth="1.5" fill="none"/>
+          </svg>
           Apply
         </button>
       </div>

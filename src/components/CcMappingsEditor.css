@@ -1,0 +1,393 @@
+/*
+ * CC Mappings Editor - Signal Flow Aesthetic
+ * Modular synth patch bay inspired design
+ */
+
+/* === CONTAINER === */
+.cc-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 340px;
+}
+
+/* === HEADER === */
+.cc-editor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* Toggle switch */
+.passthrough-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.passthrough-toggle input {
+  display: none;
+}
+
+.toggle-track {
+  position: relative;
+  width: 32px;
+  height: 18px;
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 10px;
+  transition: all 150ms ease;
+}
+
+.toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  background: #666;
+  border-radius: 50%;
+  transition: all 150ms ease;
+}
+
+.passthrough-toggle input:checked + .toggle-track {
+  background: rgba(34, 197, 94, 0.2);
+  border-color: #22c55e;
+}
+
+.passthrough-toggle input:checked + .toggle-track .toggle-thumb {
+  left: 16px;
+  background: #22c55e;
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.5);
+}
+
+.toggle-label {
+  font-size: 11px;
+  color: #888;
+}
+
+/* Device badge */
+.device-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: rgba(14, 165, 233, 0.1);
+  border: 1px solid rgba(14, 165, 233, 0.2);
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: 500;
+  color: #0ea5e9;
+}
+
+.device-badge svg {
+  animation: pulse-dot 2s infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* === LEARNING BANNER === */
+.learn-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: linear-gradient(90deg, rgba(245, 158, 11, 0.15) 0%, rgba(245, 158, 11, 0.08) 100%);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 6px;
+  font-size: 11px;
+  color: #fbbf24;
+}
+
+.learn-pulse {
+  width: 8px;
+  height: 8px;
+  background: #f59e0b;
+  border-radius: 50%;
+  animation: pulse-glow 1s ease infinite;
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.6);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(245, 158, 11, 0);
+  }
+}
+
+.learn-banner button {
+  margin-left: auto;
+  padding: 4px 10px;
+  background: rgba(245, 158, 11, 0.2);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  border-radius: 4px;
+  color: #fbbf24;
+  font-size: 10px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 100ms ease;
+}
+
+.learn-banner button:hover {
+  background: rgba(245, 158, 11, 0.3);
+}
+
+/* === EMPTY STATE === */
+.empty-mappings {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 24px;
+  color: #555;
+  text-align: center;
+}
+
+.empty-icon {
+  color: #444;
+}
+
+.empty-mappings p {
+  font-size: 12px;
+  font-weight: 500;
+  color: #666;
+  margin: 0;
+}
+
+.empty-mappings span {
+  font-size: 10px;
+  color: #555;
+}
+
+/* === MAPPINGS LIST === */
+.mappings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* === MAPPING ROW === */
+.mapping-row {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr auto auto;
+  align-items: end;
+  gap: 8px;
+  padding: 10px 12px;
+  background: linear-gradient(180deg, #161616 0%, #111 100%);
+  border: 1px solid #252525;
+  border-radius: 8px;
+  transition: all 150ms ease;
+}
+
+.mapping-row:hover {
+  border-color: #333;
+  background: linear-gradient(180deg, #1a1a1a 0%, #141414 100%);
+}
+
+.mapping-row.learning {
+  border-color: rgba(245, 158, 11, 0.4);
+  background: linear-gradient(180deg, rgba(245, 158, 11, 0.08) 0%, rgba(245, 158, 11, 0.04) 100%);
+}
+
+/* Section label */
+.section-label {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: #444;
+  margin-bottom: 4px;
+}
+
+/* Source section */
+.mapping-source {
+  display: flex;
+  flex-direction: column;
+}
+
+.cc-input-group {
+  display: flex;
+  gap: 4px;
+}
+
+.cc-number-input {
+  width: 48px;
+  padding: 6px 8px;
+  background: #0d0d0d;
+  border: 1px solid #2a2a2a;
+  border-radius: 4px;
+  color: #fff;
+  font-family: "JetBrains Mono", "SF Mono", monospace;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  transition: all 100ms ease;
+}
+
+.cc-number-input:focus {
+  outline: none;
+  border-color: #0ea5e9;
+  box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.2);
+}
+
+.cc-number-input:disabled {
+  opacity: 0.5;
+}
+
+/* Learn button */
+.learn-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 4px;
+  color: #888;
+  font-size: 10px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 100ms ease;
+  white-space: nowrap;
+}
+
+.learn-btn:hover:not(.active) {
+  background: #222;
+  border-color: #444;
+  color: #aaa;
+}
+
+.learn-btn.active {
+  background: #f59e0b;
+  border-color: #f59e0b;
+  color: #000;
+  animation: pulse-btn 1s ease infinite;
+}
+
+@keyframes pulse-btn {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.learning-dots {
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+/* Arrow */
+.mapping-arrow {
+  display: flex;
+  align-items: center;
+  color: #333;
+  padding-bottom: 4px;
+}
+
+/* Target section */
+.mapping-target {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.mapping-target select,
+.mapping-target input {
+  width: 100%;
+  padding: 6px 8px;
+  background: #0d0d0d;
+  border: 1px solid #2a2a2a;
+  border-radius: 4px;
+  color: #fff;
+  font-family: var(--font-family-ui);
+  font-size: 11px;
+  transition: all 100ms ease;
+}
+
+.mapping-target select {
+  cursor: pointer;
+  padding-right: 24px;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%23666' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+}
+
+.mapping-target select:focus,
+.mapping-target input:focus {
+  outline: none;
+  border-color: #0ea5e9;
+}
+
+.mapping-target select optgroup {
+  color: #666;
+  background: #1a1a1a;
+  font-weight: 600;
+}
+
+.mapping-target select option {
+  color: #ddd;
+  background: #1a1a1a;
+  padding: 4px;
+}
+
+/* Channels section */
+.mapping-channels {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Delete button */
+.mapping-delete {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: #444;
+  cursor: pointer;
+  transition: all 100ms ease;
+  margin-bottom: 2px;
+}
+
+.mapping-delete:hover {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #ef4444;
+}
+
+/* === ADD MAPPING BUTTON === */
+.add-mapping {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 10px;
+  background: transparent;
+  border: 1px dashed #2a2a2a;
+  border-radius: 6px;
+  color: #555;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 100ms ease;
+}
+
+.add-mapping:hover {
+  border-color: #444;
+  border-style: solid;
+  background: #161616;
+  color: #888;
+}
+
+.add-mapping svg {
+  opacity: 0.7;
+}
