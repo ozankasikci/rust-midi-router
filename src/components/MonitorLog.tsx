@@ -1,6 +1,16 @@
 import { useEffect } from "react";
 import { useAppStore } from "../stores/appStore";
 import { MidiActivity, MessageKind } from "../types";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 function formatMessage(kind: MessageKind): string {
   if (kind.kind === "NoteOn") {
@@ -31,13 +41,13 @@ function formatMessage(kind: MessageKind): string {
     return "Clock";
   }
   if (kind.kind === "Start") {
-    return "▶ Start";
+    return "Start";
   }
   if (kind.kind === "Continue") {
-    return "▶ Continue";
+    return "Continue";
   }
   if (kind.kind === "Stop") {
-    return "■ Stop";
+    return "Stop";
   }
   return "Other";
 }
@@ -61,16 +71,45 @@ function formatTimestamp(ts: number): string {
   return `${timeStr}.${ms}`;
 }
 
+function getBadgeVariant(
+  kind: MessageKind["kind"]
+): "default" | "secondary" | "destructive" | "outline" {
+  switch (kind) {
+    case "NoteOn":
+    case "NoteOff":
+      return "default";
+    case "ControlChange":
+      return "secondary";
+    case "Stop":
+      return "destructive";
+    default:
+      return "outline";
+  }
+}
+
 function ActivityRow({ activity }: { activity: MidiActivity }) {
   return (
-    <tr>
-      <td className="timestamp">{formatTimestamp(activity.timestamp)}</td>
-      <td className="port">{activity.port}</td>
-      <td className="channel">
-        {activity.channel !== null ? `Ch ${activity.channel + 1}` : "-"}
-      </td>
-      <td className="message">{formatMessage(activity.kind)}</td>
-    </tr>
+    <TableRow>
+      <TableCell className="font-mono text-xs text-muted-foreground">
+        {formatTimestamp(activity.timestamp)}
+      </TableCell>
+      <TableCell className="text-xs text-blue-400">
+        {activity.port}
+      </TableCell>
+      <TableCell>
+        <Badge variant="outline">
+          {activity.channel !== null ? `Ch ${activity.channel + 1}` : "-"}
+        </Badge>
+      </TableCell>
+      <TableCell>
+        <Badge
+          variant={getBadgeVariant(activity.kind.kind)}
+          className="text-xs font-mono"
+        >
+          {formatMessage(activity.kind)}
+        </Badge>
+      </TableCell>
+    </TableRow>
   );
 }
 
@@ -84,29 +123,33 @@ export function MonitorLog() {
   }, [monitorActive, startMonitor]);
 
   return (
-    <div className="monitor-log">
-      <div className="monitor-header">
-        <span>MIDI Monitor</span>
-        <button onClick={clearLog}>Clear</button>
+    <div className="flex flex-col h-full">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-sm font-medium">MIDI Monitor</span>
+        <Button variant="outline" size="sm" onClick={clearLog}>
+          Clear
+        </Button>
       </div>
-      <div className="log-container">
-        <table>
-          <thead>
-            <tr>
-              <th>Time</th>
-              <th>Port</th>
-              <th>Ch</th>
-              <th>Message</th>
-            </tr>
-          </thead>
-          <tbody>
+      <div className="flex-1 overflow-auto rounded-md border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Time</TableHead>
+              <TableHead>Port</TableHead>
+              <TableHead>Ch</TableHead>
+              <TableHead>Message</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {activityLog.map((activity, i) => (
               <ActivityRow key={i} activity={activity} />
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
         {activityLog.length === 0 && (
-          <div className="empty-state">No MIDI activity yet</div>
+          <div className="py-12 text-center text-sm text-muted-foreground">
+            No MIDI activity yet
+          </div>
         )}
       </div>
     </div>

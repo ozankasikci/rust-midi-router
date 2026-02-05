@@ -1,4 +1,7 @@
 import { useState, useEffect } from "react";
+import { Play, Square } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import * as api from "../hooks/useMidi";
 
 export function ClockControl() {
@@ -33,36 +36,37 @@ export function ClockControl() {
   };
 
   return (
-    <div className="clock-control">
-      <div className="transport-buttons">
-        <button
-          className={`transport-btn play-btn ${running ? "active" : ""}`}
+    <div className="flex items-center gap-2 pl-4 border-l">
+      <div className="flex gap-0.5">
+        <Button
+          variant={running ? "default" : "outline"}
+          size="icon"
+          className={`h-7 w-7 ${running ? "bg-green-600 hover:bg-green-700 text-white" : ""}`}
           onClick={handlePlay}
           title="Play (Send MIDI Start)"
         >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-            <polygon points="5,3 19,12 5,21" />
-          </svg>
-        </button>
-        <button
-          className="transport-btn stop-btn"
+          <Play className="h-3.5 w-3.5" />
+        </Button>
+        <Button
+          variant="outline"
+          size="icon"
+          className="h-7 w-7"
           onClick={handleStop}
           title="Stop (Send MIDI Stop)"
         >
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
-            <rect x="3" y="3" width="18" height="18" />
-          </svg>
-        </button>
+          <Square className="h-3 w-3" />
+        </Button>
       </div>
-      <div className="bpm-control">
-        <label>BPM</label>
-        <input
+      <div className="flex items-center gap-1.5">
+        <span className="text-xs text-muted-foreground">BPM</span>
+        <Input
           type="number"
           value={bpm}
           onChange={handleBpmChange}
           min={20}
           max={300}
           step={0.1}
+          className="h-7 w-16 text-xs font-mono text-center"
         />
       </div>
     </div>

@@ -3,8 +3,7 @@ import { RoutingMatrix } from "./components/RoutingMatrix";
 import { MonitorLog } from "./components/MonitorLog";
 import { PresetBar } from "./components/PresetBar";
 import { ClockControl } from "./components/ClockControl";
-import "./styles/design-tokens.css";
-import "./App.css";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 type Tab = "matrix" | "monitor";
 
@@ -12,36 +11,34 @@ function App() {
   const [activeTab, setActiveTab] = useState<Tab>("matrix");
 
   return (
-    <div className="app">
-      <header className="app-header">
-        <h1>MIDI Router</h1>
+    <div className="flex h-screen flex-col bg-background text-foreground">
+      <header className="flex items-center justify-between border-b px-4 py-3">
+        <h1 className="text-lg font-medium">MIDI Router</h1>
         <PresetBar />
         <ClockControl />
       </header>
 
-      <main className="app-main">
-        <div style={{ display: activeTab === "matrix" ? "block" : "none" }}>
-          <RoutingMatrix />
+      <Tabs
+        value={activeTab}
+        onValueChange={(v) => setActiveTab(v as Tab)}
+        className="flex min-h-0 flex-1 flex-col"
+      >
+        <div className="px-4 pt-3">
+          <TabsList>
+            <TabsTrigger value="matrix">Matrix</TabsTrigger>
+            <TabsTrigger value="monitor">Monitor</TabsTrigger>
+          </TabsList>
         </div>
-        <div style={{ display: activeTab === "monitor" ? "block" : "none" }}>
-          <MonitorLog />
-        </div>
-      </main>
 
-      <nav className="app-tabs">
-        <button
-          className={activeTab === "matrix" ? "active" : ""}
-          onClick={() => setActiveTab("matrix")}
-        >
-          Matrix
-        </button>
-        <button
-          className={activeTab === "monitor" ? "active" : ""}
-          onClick={() => setActiveTab("monitor")}
-        >
-          Monitor
-        </button>
-      </nav>
+        <main className="min-h-0 flex-1 overflow-auto p-4">
+          <div style={{ display: activeTab === "matrix" ? "block" : "none" }}>
+            <RoutingMatrix />
+          </div>
+          <div style={{ display: activeTab === "monitor" ? "block" : "none" }}>
+            <MonitorLog />
+          </div>
+        </main>
+      </Tabs>
     </div>
   );
 }

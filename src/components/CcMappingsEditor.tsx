@@ -5,8 +5,21 @@ import {
   getParametersByCategory,
 } from "../data/deviceCcMaps";
 import { startMidiMonitor } from "../hooks/useMidi";
-import { ChannelSelector } from "./ui";
-import "./CcMappingsEditor.css";
+import { ChannelSelector } from "./ChannelSelector";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { ArrowRight, Plus, X, CircleDot } from "lucide-react";
 
 interface Props {
   ccPassthrough: boolean;
@@ -175,142 +188,165 @@ export function CcMappingsEditor({
   const renderTargetCcSelector = (row: FlatRow, index: number) => {
     if (deviceMap && parametersByCategory) {
       return (
-        <select
-          value={row.targetCC}
-          onChange={(e) => updateRow(index, "targetCC", e.target.value)}
-          className="cc-select"
+        <Select
+          value={String(row.targetCC)}
+          onValueChange={(value) => updateRow(index, "targetCC", value)}
         >
-          {Array.from(parametersByCategory.entries()).map(
-            ([category, params]) => (
-              <optgroup key={category} label={category}>
-                {params.map((param) => (
-                  <option key={param.cc} value={param.cc}>
-                    {param.name} ({param.cc})
-                  </option>
-                ))}
-              </optgroup>
-            )
-          )}
-          {/* Allow manual CC entry if not in list */}
-          {!deviceMap.parameters.find((p) => p.cc === row.targetCC) && (
-            <option value={row.targetCC}>CC {row.targetCC}</option>
-          )}
-        </select>
+          <SelectTrigger className="h-7 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {Array.from(parametersByCategory.entries()).map(
+              ([category, params]) => (
+                <SelectGroup key={category}>
+                  <SelectLabel>{category}</SelectLabel>
+                  {params.map((param) => (
+                    <SelectItem key={param.cc} value={String(param.cc)}>
+                      {param.name} ({param.cc})
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              )
+            )}
+            {/* Allow manual CC entry if not in list */}
+            {!deviceMap.parameters.find((p) => p.cc === row.targetCC) && (
+              <SelectItem value={String(row.targetCC)}>
+                CC {row.targetCC}
+              </SelectItem>
+            )}
+          </SelectContent>
+        </Select>
       );
     }
 
     return (
-      <input
+      <Input
         type="number"
-        min="0"
-        max="127"
+        min={0}
+        max={127}
         value={row.targetCC}
         onChange={(e) => updateRow(index, "targetCC", e.target.value)}
+        className="h-7 w-14 text-xs font-mono text-center"
       />
     );
   };
 
   return (
-    <div className="cc-editor">
+    <div className="space-y-3">
       {/* Header with passthrough toggle */}
-      <div className="cc-editor-header">
-        <label className="passthrough-toggle">
-          <input
-            type="checkbox"
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Switch
             checked={passthrough}
-            onChange={(e) => handlePassthroughChange(e.target.checked)}
+            onCheckedChange={handlePassthroughChange}
+            className="scale-75"
           />
-          <span className="toggle-track">
-            <span className="toggle-thumb" />
-          </span>
-          <span className="toggle-label">Pass unmapped</span>
-        </label>
+          <span className="text-xs text-muted-foreground">Pass unmapped</span>
+        </div>
 
         {deviceMap && (
-          <div className="device-badge">
-            <svg width="12" height="12" viewBox="0 0 12 12">
-              <circle cx="6" cy="6" r="3" fill="currentColor"/>
-            </svg>
+          <Badge variant="secondary" className="text-xs">
+            <CircleDot className="mr-1 h-3 w-3" />
             {deviceMap.name}
-          </div>
+          </Badge>
         )}
       </div>
 
       {/* Learning indicator */}
       {learningRowIndex !== null && (
-        <div className="learn-banner">
-          <div className="learn-pulse" />
-          <span>Move a knob or fader...</span>
-          <button onClick={cancelLearning}>Cancel</button>
+        <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-yellow-500/10 border border-yellow-500/20 text-xs text-yellow-400">
+          <span className="relative flex h-2 w-2">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-yellow-400 opacity-75" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-yellow-400" />
+          </span>
+          <span className="flex-1">Move a knob or fader...</span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-5 px-2 text-xs text-yellow-400 hover:text-yellow-300"
+            onClick={cancelLearning}
+          >
+            Cancel
+          </Button>
         </div>
       )}
 
       {/* Mappings list */}
-      <div className="mappings-list">
+      <div className="space-y-2">
         {rows.length === 0 ? (
-          <div className="empty-mappings">
-            <svg width="32" height="32" viewBox="0 0 32 32" className="empty-icon">
-              <circle cx="8" cy="8" r="4" stroke="currentColor" strokeWidth="1.5" fill="none" opacity="0.3"/>
-              <circle cx="24" cy="24" r="4" stroke="currentColor" strokeWidth="1.5" fill="none" opacity="0.3"/>
-              <path d="M11 11 L21 21" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2 2" opacity="0.3"/>
-            </svg>
-            <p>No CC mappings</p>
-            <span>Map controller knobs to device parameters</span>
+          <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+            <p className="text-sm font-medium">No CC mappings</p>
+            <span className="text-xs">Map controller knobs to device parameters</span>
           </div>
         ) : (
           rows.map((row, index) => (
             <div
               key={index}
-              className={`mapping-row ${learningRowIndex === index ? "learning" : ""}`}
+              className={`flex items-end gap-2 p-2 rounded-md border bg-card ${
+                learningRowIndex === index
+                  ? "border-yellow-500/30 bg-yellow-500/5"
+                  : ""
+              }`}
             >
               {/* Source section */}
-              <div className="mapping-source">
-                <div className="section-label">FROM</div>
-                <div className="cc-input-group">
-                  <input
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+                  FROM
+                </span>
+                <div className="flex items-center gap-1">
+                  <Input
                     type="number"
-                    min="0"
-                    max="127"
+                    min={0}
+                    max={127}
                     value={row.sourceCC}
                     onChange={(e) => updateRow(index, "sourceCC", e.target.value)}
                     disabled={learningRowIndex === index}
-                    className="cc-number-input"
+                    className="h-7 w-14 text-xs font-mono text-center"
                   />
-                  <button
-                    className={`learn-btn ${learningRowIndex === index ? "active" : ""}`}
-                    onClick={() => learningRowIndex === index ? cancelLearning() : startLearning(index)}
+                  <Button
+                    variant={learningRowIndex === index ? "default" : "outline"}
+                    size="sm"
+                    className={`h-7 text-xs ${
+                      learningRowIndex === index
+                        ? "bg-yellow-500 hover:bg-yellow-600 text-yellow-950"
+                        : ""
+                    }`}
+                    onClick={() =>
+                      learningRowIndex === index
+                        ? cancelLearning()
+                        : startLearning(index)
+                    }
                   >
                     {learningRowIndex === index ? (
-                      <span className="learning-dots">...</span>
+                      <span>...</span>
                     ) : (
                       <>
-                        <svg width="10" height="10" viewBox="0 0 10 10">
-                          <circle cx="5" cy="5" r="3" stroke="currentColor" strokeWidth="1.5" fill="none"/>
-                          <circle cx="5" cy="5" r="1" fill="currentColor"/>
-                        </svg>
+                        <CircleDot className="mr-1 h-3 w-3" />
                         Learn
                       </>
                     )}
-                  </button>
+                  </Button>
                 </div>
               </div>
 
               {/* Arrow */}
-              <div className="mapping-arrow">
-                <svg width="24" height="12" viewBox="0 0 24 12">
-                  <path d="M0 6 H18 M14 2 L18 6 L14 10" stroke="currentColor" strokeWidth="1.5" fill="none"/>
-                </svg>
+              <div className="flex items-center pb-1">
+                <ArrowRight className="h-4 w-4 text-muted-foreground" />
               </div>
 
               {/* Target section */}
-              <div className="mapping-target">
-                <div className="section-label">TO</div>
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+                  TO
+                </span>
                 {renderTargetCcSelector(row, index)}
               </div>
 
               {/* Channel section */}
-              <div className="mapping-channels">
-                <div className="section-label">CH</div>
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+                  CH
+                </span>
                 <ChannelSelector
                   channels={row.channels}
                   onChange={(channels) => updateRow(index, "channels", channels)}
@@ -318,27 +354,30 @@ export function CcMappingsEditor({
               </div>
 
               {/* Delete button */}
-              <button
-                className="mapping-delete"
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 text-muted-foreground hover:text-destructive"
                 onClick={() => removeRow(index)}
                 title="Remove mapping"
               >
-                <svg width="12" height="12" viewBox="0 0 12 12">
-                  <path d="M3 3 L9 9 M9 3 L3 9" stroke="currentColor" strokeWidth="1.5"/>
-                </svg>
-              </button>
+                <X className="h-3 w-3" />
+              </Button>
             </div>
           ))
         )}
       </div>
 
       {/* Add mapping button */}
-      <button className="add-mapping" onClick={addRow}>
-        <svg width="12" height="12" viewBox="0 0 12 12">
-          <path d="M6 2 V10 M2 6 H10" stroke="currentColor" strokeWidth="1.5"/>
-        </svg>
+      <Button
+        variant="outline"
+        size="sm"
+        className="w-full text-xs"
+        onClick={addRow}
+      >
+        <Plus className="mr-1 h-3 w-3" />
         Add Mapping
-      </button>
+      </Button>
     </div>
   );
 }

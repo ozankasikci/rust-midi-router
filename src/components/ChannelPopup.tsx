@@ -3,7 +3,12 @@ import { Route, ChannelFilter, CcMapping } from "../types";
 import { removeRoute } from "../hooks/useMidi";
 import { useAppStore } from "../stores/appStore";
 import { CcMappingsEditor } from "./CcMappingsEditor";
-import "./ChannelPopup.css";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Toggle } from "@/components/ui/toggle";
+import { Separator } from "@/components/ui/separator";
+import { ArrowRight, X, Trash2, Check } from "lucide-react";
 
 interface Props {
   route: Route;
@@ -18,19 +23,19 @@ export function ChannelPopup({ route, x, y, onClose }: Props) {
   const [selectedChannels, setSelectedChannels] = useState<Set<number>>(
     new Set()
   );
-  const [filterMode, setFilterMode] = useState<"all" | "only" | "except">("all");
+  const [filterMode, setFilterMode] = useState<"all" | "only" | "except">(
+    "all"
+  );
   const [position, setPosition] = useState({ left: x, top: y });
-  const [isVisible, setIsVisible] = useState(false);
   const popupRef = useRef<HTMLDivElement>(null);
 
   // CC mappings state
-  const [ccPassthrough, setCcPassthrough] = useState(route.cc_passthrough ?? true);
-  const [ccMappings, setCcMappings] = useState<CcMapping[]>(route.cc_mappings ?? []);
-
-  // Animate in on mount
-  useEffect(() => {
-    requestAnimationFrame(() => setIsVisible(true));
-  }, []);
+  const [ccPassthrough, setCcPassthrough] = useState(
+    route.cc_passthrough ?? true
+  );
+  const [ccMappings, setCcMappings] = useState<CcMapping[]>(
+    route.cc_mappings ?? []
+  );
 
   useEffect(() => {
     // Initialize channel filter from route
@@ -81,7 +86,10 @@ export function ChannelPopup({ route, x, y, onClose }: Props) {
     onClose();
   };
 
-  const handleCcMappingsChange = (passthrough: boolean, mappings: CcMapping[]) => {
+  const handleCcMappingsChange = (
+    passthrough: boolean,
+    mappings: CcMapping[]
+  ) => {
     setCcPassthrough(passthrough);
     setCcMappings(mappings);
   };
@@ -128,8 +136,7 @@ export function ChannelPopup({ route, x, y, onClose }: Props) {
   // Close on click outside
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (!target.closest(".channel-popup")) {
+      if (popupRef.current && !popupRef.current.contains(e.target as Node)) {
         onClose();
       }
     };
@@ -140,120 +147,109 @@ export function ChannelPopup({ route, x, y, onClose }: Props) {
   return (
     <div
       ref={popupRef}
-      className={`route-popup ${isVisible ? 'visible' : ''}`}
-      style={{ left: position.left, top: position.top, position: "fixed" }}
+      className="fixed z-50 w-[340px] rounded-lg border bg-popover shadow-lg animate-in fade-in-0 zoom-in-95"
+      style={{ left: position.left, top: position.top }}
     >
-      {/* Rack-style header with notches */}
-      <div className="popup-rack-header">
-        <div className="rack-notch" />
-        <div className="rack-notch" />
-        <div className="rack-notch" />
-      </div>
-
-      <div className="popup-header">
-        <div className="route-path">
-          <span className="port-name source">{route.source.display_name}</span>
-          <span className="route-arrow">
-            <svg width="20" height="10" viewBox="0 0 20 10">
-              <path d="M0 5 L14 5 M10 1 L14 5 L10 9" stroke="currentColor" strokeWidth="1.5" fill="none"/>
-            </svg>
+      {/* Header: source -> dest port names + close */}
+      <div className="flex items-center justify-between gap-2 px-3 py-2">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="font-mono text-sm text-green-400 truncate">
+            {route.source.display_name}
           </span>
-          <span className="port-name dest">{route.destination.display_name}</span>
+          <ArrowRight className="size-4 shrink-0 text-muted-foreground" />
+          <span className="font-mono text-sm text-blue-400 truncate">
+            {route.destination.display_name}
+          </span>
         </div>
-        <button className="close-btn" onClick={onClose}>
-          <svg width="12" height="12" viewBox="0 0 12 12">
-            <path d="M2 2 L10 10 M10 2 L2 10" stroke="currentColor" strokeWidth="1.5"/>
-          </svg>
-        </button>
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          onClick={onClose}
+          className="shrink-0"
+        >
+          <X className="size-3.5" />
+        </Button>
       </div>
 
-      <div className="popup-tabs">
-        <button
-          className={activeTab === "channels" ? "active" : ""}
-          onClick={() => setActiveTab("channels")}
-        >
-          <svg width="14" height="14" viewBox="0 0 14 14" className="tab-icon">
-            <rect x="1" y="1" width="4" height="4" rx="1" fill="currentColor" opacity="0.8"/>
-            <rect x="9" y="1" width="4" height="4" rx="1" fill="currentColor" opacity="0.4"/>
-            <rect x="1" y="9" width="4" height="4" rx="1" fill="currentColor" opacity="0.4"/>
-            <rect x="9" y="9" width="4" height="4" rx="1" fill="currentColor" opacity="0.8"/>
-          </svg>
-          Channels
-        </button>
-        <button
-          className={activeTab === "cc" ? "active" : ""}
-          onClick={() => setActiveTab("cc")}
-        >
-          <svg width="14" height="14" viewBox="0 0 14 14" className="tab-icon">
-            <circle cx="4" cy="4" r="2.5" stroke="currentColor" strokeWidth="1.2" fill="none"/>
-            <circle cx="10" cy="10" r="2.5" stroke="currentColor" strokeWidth="1.2" fill="none"/>
-            <path d="M5.5 5.5 L8.5 8.5" stroke="currentColor" strokeWidth="1.2"/>
-          </svg>
-          CC Map
-        </button>
-      </div>
+      {/* Tabs */}
+      <Tabs
+        value={activeTab}
+        onValueChange={(v) => setActiveTab(v as "channels" | "cc")}
+      >
+        <TabsList className="w-full rounded-none border-b bg-transparent h-9">
+          <TabsTrigger value="channels">Channels</TabsTrigger>
+          <TabsTrigger value="cc">CC Map</TabsTrigger>
+        </TabsList>
 
-      <div className="popup-content">
-        {activeTab === "channels" && (
-          <div className="channels-tab">
-            <div className="filter-mode">
-              <label className={`filter-option ${filterMode === "all" ? "selected" : ""}`}>
-                <input
-                  type="radio"
-                  checked={filterMode === "all"}
-                  onChange={() => setFilterMode("all")}
-                />
-                <span className="filter-radio" />
-                <span className="filter-label">All channels</span>
-              </label>
-              <label className={`filter-option ${filterMode === "only" ? "selected" : ""}`}>
-                <input
-                  type="radio"
-                  checked={filterMode === "only"}
-                  onChange={() => setFilterMode("only")}
-                />
-                <span className="filter-radio" />
-                <span className="filter-label">Only selected</span>
-              </label>
-              <label className={`filter-option ${filterMode === "except" ? "selected" : ""}`}>
-                <input
-                  type="radio"
-                  checked={filterMode === "except"}
-                  onChange={() => setFilterMode("except")}
-                />
-                <span className="filter-radio" />
-                <span className="filter-label">All except</span>
-              </label>
-            </div>
+        <TabsContent value="channels" className="p-3">
+          <div className="space-y-3">
+            {/* Filter mode toggle group */}
+            <ToggleGroup
+              type="single"
+              value={filterMode}
+              onValueChange={(value) => {
+                if (value) setFilterMode(value as "all" | "only" | "except");
+              }}
+              variant="outline"
+              size="sm"
+              className="w-full"
+            >
+              <ToggleGroupItem value="all" className="flex-1">
+                All
+              </ToggleGroupItem>
+              <ToggleGroupItem value="only" className="flex-1">
+                Only
+              </ToggleGroupItem>
+              <ToggleGroupItem value="except" className="flex-1">
+                Except
+              </ToggleGroupItem>
+            </ToggleGroup>
 
+            {/* Channel grid */}
             {filterMode !== "all" && (
-              <div className="led-matrix">
-                <div className="matrix-label">MIDI Channels</div>
-                <div className="led-grid">
+              <div className="space-y-2">
+                <div className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
+                  MIDI Channels
+                </div>
+                <div className="grid grid-cols-8 gap-1">
                   {Array.from({ length: 16 }, (_, i) => i + 1).map((ch) => (
-                    <button
+                    <Toggle
                       key={ch}
-                      className={`led-btn ${selectedChannels.has(ch) ? "active" : ""}`}
-                      onClick={() => toggleChannel(ch)}
+                      size="sm"
+                      pressed={selectedChannels.has(ch)}
+                      onPressedChange={() => toggleChannel(ch)}
+                      className="h-7 w-full text-xs font-mono data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
                     >
                       {ch}
-                    </button>
+                    </Toggle>
                   ))}
                 </div>
-                <div className="matrix-quick-actions">
-                  <button onClick={() => setSelectedChannels(new Set(Array.from({ length: 16 }, (_, i) => i + 1)))}>
+                <div className="flex gap-1">
+                  <Button
+                    variant="outline"
+                    size="xs"
+                    onClick={() =>
+                      setSelectedChannels(
+                        new Set(Array.from({ length: 16 }, (_, i) => i + 1))
+                      )
+                    }
+                  >
                     All
-                  </button>
-                  <button onClick={() => setSelectedChannels(new Set())}>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="xs"
+                    onClick={() => setSelectedChannels(new Set())}
+                  >
                     None
-                  </button>
+                  </Button>
                 </div>
               </div>
             )}
           </div>
-        )}
+        </TabsContent>
 
-        {activeTab === "cc" && (
+        <TabsContent value="cc" className="p-3">
           <CcMappingsEditor
             ccPassthrough={ccPassthrough}
             ccMappings={ccMappings}
@@ -261,22 +257,20 @@ export function ChannelPopup({ route, x, y, onClose }: Props) {
             destinationPort={route.destination.name}
             onChange={handleCcMappingsChange}
           />
-        )}
-      </div>
+        </TabsContent>
+      </Tabs>
 
-      <div className="popup-actions">
-        <button onClick={handleDelete} className="action-btn danger">
-          <svg width="12" height="12" viewBox="0 0 12 12">
-            <path d="M3 3 L9 9 M9 3 L3 9" stroke="currentColor" strokeWidth="1.5"/>
-          </svg>
+      {/* Actions footer */}
+      <Separator />
+      <div className="flex items-center justify-between px-3 py-2">
+        <Button variant="destructive" size="sm" onClick={handleDelete}>
+          <Trash2 />
           Delete
-        </button>
-        <button onClick={handleApply} className="action-btn primary">
-          <svg width="12" height="12" viewBox="0 0 12 12">
-            <path d="M2 6 L5 9 L10 3" stroke="currentColor" strokeWidth="1.5" fill="none"/>
-          </svg>
+        </Button>
+        <Button size="sm" onClick={handleApply}>
+          <Check />
           Apply
-        </button>
+        </Button>
       </div>
     </div>
   );
